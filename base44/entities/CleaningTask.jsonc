@@ -1,0 +1,61 @@
+{
+  "name": "CleaningTask",
+  "type": "object",
+  "properties": {
+    "bed_id": {
+      "type": "string"
+    },
+    "bed_code": {
+      "type": "string"
+    },
+    "unit_name": {
+      "type": "string"
+    },
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "cleaning_type": {
+      "type": "string",
+      "enum": [
+        "concorrente",
+        "terminal"
+      ],
+      "default": "terminal"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "em_andamento",
+        "concluida"
+      ],
+      "default": "em_andamento"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_seconds": {
+      "type": "number"
+    },
+    "mv_sync_status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "enviado",
+        "erro"
+      ],
+      "default": "pendente"
+    }
+  },
+  "required": [
+    "bed_id",
+    "started_at"
+  ]
+}

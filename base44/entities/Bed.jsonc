@@ -1,0 +1,39 @@
+{
+  "name": "Bed",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string"
+    },
+    "unit_id": {
+      "type": "string"
+    },
+    "unit_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ocupado",
+        "aguardando_limpeza",
+        "em_limpeza",
+        "livre"
+      ],
+      "default": "livre"
+    },
+    "mv_bed_code": {
+      "type": "string"
+    },
+    "missing_count": {
+      "type": "number",
+      "default": 0
+    },
+    "missing_items": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "unit_id"
+  ]
+}

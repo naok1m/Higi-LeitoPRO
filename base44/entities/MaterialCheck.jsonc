@@ -1,0 +1,48 @@
+{
+  "name": "MaterialCheck",
+  "type": "object",
+  "properties": {
+    "bed_id": {
+      "type": "string"
+    },
+    "bed_code": {
+      "type": "string"
+    },
+    "unit_name": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "checked_by": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "com_falta"
+      ],
+      "default": "ok"
+    },
+    "total_items": {
+      "type": "number",
+      "default": 0
+    },
+    "missing_count": {
+      "type": "number",
+      "default": 0
+    },
+    "missing_items": {
+      "type": "string"
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "bed_id",
+    "checked_at"
+  ]
+}
