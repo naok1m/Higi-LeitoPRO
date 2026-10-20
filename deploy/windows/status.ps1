@@ -14,6 +14,8 @@ foreach ($service in $Services) {
     $found = Get-Service -Name $service.Id -ErrorAction SilentlyContinue
     if ($found) { $all += $found } else { Write-Warn "$($service.Id) nao esta instalado" }
 }
+$proxy = Get-Service -Name $ProxyServiceId -ErrorAction SilentlyContinue
+if ($proxy) { $all += $proxy }
 $all | Format-Table Name, Status, StartType -AutoSize
 
 Write-Step 'Teste de saude'

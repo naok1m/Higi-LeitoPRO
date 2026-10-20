@@ -5,6 +5,7 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { appUrl, BASE_PATH } from '@/lib/basePath';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -32,7 +33,7 @@ const AuthenticatedApp = () => {
   useEffect(() => {
     if (!isAuthenticated) return undefined;
 
-    const eventSource = new EventSource('/api/events');
+    const eventSource = new EventSource(appUrl('/api/events'));
     const refreshQueries = (event) => {
       void queryClient.invalidateQueries();
       if (JSON.parse(event.data).event === 'user.access_changed') {
@@ -108,7 +109,7 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
+        <Router basename={BASE_PATH || '/'}>
           <ScrollToTop />
           <AuthenticatedApp />
         </Router>

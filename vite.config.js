@@ -7,16 +7,20 @@ import { fileURLToPath, URL } from 'node:url';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiTarget = `http://127.0.0.1:${env.PORT || 3000}`;
+  // HIGI_BASE_PATH=/higi publica o app em /higi/ (atrás do proxy da porta 8000).
+  const basePath = (env.HIGI_BASE_PATH || '').replace(/\/+$/, '');
+  const proxy = { [`${basePath}/api`]: { target: apiTarget } };
 
   return {
+    base: `${basePath}/`,
     plugins: [react()],
     server: {
       host: '0.0.0.0',
-      proxy: { '/api': { target: apiTarget } },
+      proxy,
     },
     preview: {
       host: '0.0.0.0',
-      proxy: { '/api': { target: apiTarget } },
+      proxy,
     },
     resolve: {
       alias: {

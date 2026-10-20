@@ -78,8 +78,25 @@ const serveStatic = async (request, response) => {
   }
 };
 
+// Com HIGI_BASE_PATH=/higi, "/higi/api/..." vira "/api/..." daqui para dentro.
+// Caminhos sem o prefixo continuam aceitos (health check e acesso local direto).
+const stripBasePath = (request, response) => {
+  const { basePath } = config;
+  if (!basePath) return true;
+  const queryStart = request.url.indexOf('?');
+  const pathname = queryStart === -1 ? request.url : request.url.slice(0, queryStart);
+  if (pathname === basePath) {
+    response.writeHead(308, { Location: `${basePath}/${queryStart === -1 ? '' : request.url.slice(queryStart)}` });
+    response.end();
+    return false;
+  }
+  if (pathname.startsWith(`${basePath}/`)) request.url = request.url.slice(basePath.length);
+  return true;
+};
+
 const handleRequest = (request, response) => {
   for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
+  if (!stripBasePath(request, response)) return;
   apiHandler(request, response, () => {
     serveStatic(request, response).catch((error) => {
       logger.error('Falha ao servir arquivo do frontend.', error);
@@ -98,7 +115,7 @@ const stopChangeListener = startChangeListener();
 
 server.listen(config.port, config.host, () => {
   const protocol = config.tls ? 'https' : 'http';
-  logger.info(`Higi Leito PRO (API) ouvindo em ${protocol}://${config.host}:${config.port}`);
+  logger.info(`Higi Leito PRO (API) ouvindo em ${protocol}://${config.host}:${config.port}${config.basePath}/`);
 });
 
 let shuttingDown = false;

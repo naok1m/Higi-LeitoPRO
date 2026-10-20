@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { db } from "@/api/localClient";
+import { appUrl } from "@/lib/basePath";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       await db.auth.resetPassword({ resetToken, newPassword });
-      window.location.href = "/login";
+      window.location.href = appUrl("/login");
     } catch (err) {
       setError(err.message || "Não foi possível redefinir a senha.");
     } finally {

@@ -28,6 +28,10 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   HIGI_TLS_PFX_PATH: optionalText,
   HIGI_TLS_PFX_PASSPHRASE: optionalText,
+  HIGI_BASE_PATH: optionalText.refine(
+    (value) => value === undefined || /^(\/[A-Za-z0-9._-]+)+\/?$/.test(value),
+    'HIGI_BASE_PATH deve ser vazio ou algo como /higi',
+  ),
   HIGI_ADMIN_EMAIL: optionalText,
   HIGI_WEBHOOK_URL: optionalText,
   HIGI_WEBHOOK_SECRET: optionalText,
@@ -77,6 +81,7 @@ export const getConfig = () => {
         passphrase: env.HIGI_TLS_PFX_PASSPHRASE,
       }
       : null,
+    basePath: (env.HIGI_BASE_PATH || '').replace(/\/+$/, ''),
     adminBootstrapEmail: (env.HIGI_ADMIN_EMAIL || '').toLowerCase(),
     webhook: { url: env.HIGI_WEBHOOK_URL || '', secret: env.HIGI_WEBHOOK_SECRET || '' },
     distDir: path.join(projectRoot, 'dist'),

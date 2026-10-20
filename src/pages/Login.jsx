@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import { safeReturnTo } from "@/lib/authReturnTo";
+import { appUrl } from "@/lib/basePath";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -22,7 +23,7 @@ export default function Login() {
     setLoading(true);
     try {
       await db.auth.loginViaEmailPassword(email, password);
-      window.location.href = returnTo;
+      window.location.href = appUrl(returnTo);
     } catch (err) {
       setError(err.message || "E-mail ou senha inválidos.");
     } finally {
@@ -32,7 +33,7 @@ export default function Login() {
 
   return (
     <AuthLayout
-      imageSrc="/I%CC%81cone%20de%20Limpeza%20Inteligente.png"
+      imageSrc={appUrl("/I%CC%81cone%20de%20Limpeza%20Inteligente.png")}
       imageAlt="Ícone de Limpeza Inteligente"
       title="Higienização"
       subtitle="Entre na sua conta"

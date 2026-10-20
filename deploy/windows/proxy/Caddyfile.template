@@ -1,0 +1,30 @@
+# Proxy da porta {{PUBLIC_PORT}}: divide a porta entre o Higi Leito PRO e a API FastAPI.
+# Gerado por deploy\windows\proxy\install-proxy.ps1; edite o template, não a cópia em tools\.
+{
+	# Sem painel de administração e sem certificados automáticos (rede interna, acesso por IP).
+	admin off
+	auto_https off
+}
+
+:{{PUBLIC_PORT}} {
+	log {
+		output file "{{LOGS_DIR}}/proxy-access.log" {
+			roll_size 10MiB
+			roll_keep 10
+		}
+	}
+
+	# /higi e tudo abaixo dele -> Higi Leito PRO (o prefixo é mantido; o app sabe lidar com ele).
+	@higi path {{BASE_PATH}} {{BASE_PATH}}/*
+	handle @higi {
+		reverse_proxy 127.0.0.1:{{HIGI_PORT}} {
+			# Entrega os avisos em tempo real (SSE) na hora, sem acumular.
+			flush_interval -1
+		}
+	}
+
+	# Todo o resto continua indo para a API FastAPI, como antes.
+	handle {
+		reverse_proxy 127.0.0.1:{{FASTAPI_PORT}}
+	}
+}

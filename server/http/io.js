@@ -37,14 +37,25 @@ export const getSessionToken = (request) => {
 
 // "Secure" só quando o servidor roda em HTTPS; em HTTP o navegador descartaria o cookie.
 const secureFlag = () => (getConfig().tls ? '; Secure' : '');
+// Com HIGI_BASE_PATH, o cookie só vai para /higi e não para o outro sistema da mesma porta.
+const cookiePath = () => getConfig().basePath || '/';
 
 export const setSessionCookie = (token) =>
-  `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(sessionDurationMs / 1000)}${secureFlag()}`;
+  `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=${cookiePath()}; Max-Age=${Math.floor(sessionDurationMs / 1000)}${secureFlag()}`;
 
-export const clearSessionCookie = () => `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureFlag()}`;
+export const clearSessionCookie = () =>
+  `${cookieName}=; HttpOnly; SameSite=Strict; Path=${cookiePath()}; Max-Age=0${secureFlag()}`;
+
+const loopbackAddresses = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
 // Rotas "somente no servidor" (primeiro admin, link de redefinição, importação)
-// dependem do IP de origem. Não coloque um proxy reverso na frente sem revisar isso:
-// atrás de um proxy toda requisição parece vir de 127.0.0.1.
-export const isHostConnection = (request) =>
-  ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress);
+// exigem que o pedido venha do próprio servidor. Atrás do proxy (Caddy), a conexão
+// sempre vem de 127.0.0.1, então também conferimos o X-Forwarded-For: o Caddy
+// descarta o valor enviado pelo navegador e grava o IP real de quem acessou.
+export const isHostConnection = (request) => {
+  if (!loopbackAddresses.includes(request.socket.remoteAddress)) return false;
+  const forwardedFor = request.headers['x-forwarded-for'];
+  if (!forwardedFor) return true;
+  const clientAddress = String(forwardedFor).split(',').at(-1).trim();
+  return loopbackAddresses.includes(clientAddress);
+};

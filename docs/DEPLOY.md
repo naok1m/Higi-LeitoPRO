@@ -119,6 +119,69 @@ morrer, um backup que está nele mesmo não ajuda.
 
 ---
 
+## Porta compartilhada com a API FastAPI (porta 8000)
+
+Enquanto a segurança não liberar uma porta só para o Higi, ele usa a mesma porta 8000 da API FastAPI que já roda
+no servidor. Quem divide a porta é o **Caddy**, um proxy que roda como serviço do Windows:
+
+```
+http://10.85.250.25:8000/higi/...  →  Higi Leito PRO   (127.0.0.1:3000, só interno)
+http://10.85.250.25:8000/...       →  API FastAPI      (127.0.0.1:8001, só interno)
+```
+
+Para quem usa a FastAPI, os endereços continuam os mesmos. Nada no código da FastAPI muda: só o comando que a inicia.
+
+### Antes de começar
+
+- O Higi já instalado (passos 1 a 7 acima).
+- O **comando que inicia a FastAPI** à mão. Hoje ela sobe num cmd com algo como
+  `uvicorn main:app --host 10.85.250.25 --port 8000`.
+- Um horário combinado com quem usa a FastAPI. Ela fica fora do ar por cerca de 1 minuto durante a troca.
+
+### Instalar
+
+```powershell
+cd C:\HigiLeitoPro
+powershell -ExecutionPolicy Bypass -File deploy\windows\proxy\install-proxy.ps1
+```
+
+O script:
+1. baixa o Caddy e confere a integridade dele;
+2. coloca o Higi em `/higi` e deixa a porta 3000 só interna (gera as telas de novo e reinicia o Higi);
+3. **pausa e pede para você mover a FastAPI**:
+   - feche o cmd dela;
+   - inicie de novo **só na porta interna**:
+     ```
+     uvicorn main:app --host 127.0.0.1 --port 8001 --proxy-headers --forwarded-allow-ips 127.0.0.1
+     ```
+     As duas opções `--proxy-headers ...` fazem a FastAPI continuar vendo o IP real de quem acessa, e não o do proxy.
+   - volte ao PowerShell e aperte Enter;
+4. instala o serviço **HigiLeitoPro-Proxy** na porta 8000 e testa os dois sistemas.
+
+No final:
+- Higi: `http://10.85.250.25:8000/higi`.
+- Primeiro administrador e links de redefinição de senha: **no próprio servidor**, em `http://localhost:3000/higi`.
+
+> **Atenção:** a FastAPI continua rodando num cmd aberto. Se o servidor reiniciar ou a sessão do mstsc
+> for encerrada, ela para. Como agora o Caddy encaminha para ela, a raiz da porta 8000 responde com erro 502 até
+> ela ser iniciada de novo. Vale combinar com o responsável por ela transformá-la em serviço do Windows.
+
+### Quando a segurança liberar uma porta só para o Higi
+
+Ex.: porta 3000.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\windows\proxy\remove-proxy.ps1 -HigiPort 3000
+```
+
+O script remove o proxy, volta o Higi para a raiz (`http://10.85.250.25:3000`) e libera a porta no firewall. Depois,
+**volte a FastAPI para o comando original** (`--host 10.85.250.25 --port 8000`).
+
+Se a instalação do proxy der errado no meio, o mesmo comando desfaz tudo. Use `-HigiPort 3000` e volte a FastAPI
+para a 8000.
+
+---
+
 ## Dia a dia
 
 ### Publicar uma versão nova
@@ -148,6 +211,7 @@ Mostra os serviços, o teste de saúde (`/api/health`) e as últimas linhas dos 
 | Logs da API | `logs\HigiLeitoPro-API.out.log` e `.err.log` |
 | Logs do worker (Oracle, webhook) | `logs\HigiLeitoPro-Worker.out.log` e `.err.log` |
 | Log dos backups | `backups\backup.log` |
+| Logs do proxy (porta 8000) | `logs\HigiLeitoPro-Proxy.*.log` e `logs\proxy-access.log` |
 | Serviços | `services.msc` → "Higi Leito PRO - API" / "- Worker" |
 
 Os logs giram sozinhos a cada 10 MB (são mantidos os 10 últimos).
@@ -200,6 +264,7 @@ Recomendado em seguida, com a TI:
 4. Os serviços rodam como **LocalSystem**. Para endurecer, a TI pode criar uma conta de serviço dedicada
    com permissão só na pasta do projeto e configurá-la em `services.msc` (aba "Logon").
 
-> Não coloque um proxy reverso (IIS/nginx) na frente sem revisar `server/http/io.js` (`isHostConnection`).
-> As telas "somente no servidor" (primeiro admin, link de redefinição de senha) confiam no IP de origem, e atrás
-> de um proxy toda requisição parece vir do próprio servidor.
+> O proxy usado aqui é o Caddy, que grava o IP real de quem acessa no cabeçalho `X-Forwarded-For` e descarta o
+> valor que vier do navegador. O Higi usa esse cabeçalho para manter as telas "somente no servidor" fechadas para a
+> rede (`server/http/io.js`, `isHostConnection`). Se um dia trocar o Caddy por outro proxy (IIS, nginx), confira se
+> ele faz o mesmo antes de colocar em produção.

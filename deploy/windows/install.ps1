@@ -87,20 +87,25 @@ foreach ($service in $Services) {
         & $wrapper uninstall | Out-Null
     }
     Copy-Item $template $wrapper -Force
-    Write-ServiceConfig $service $nodePath $pgService
+    Write-ServiceConfig $service $nodePath $service.Script $pgService
     & $wrapper install
     Assert-ExitCode "Instalar o servico $($service.Id)"
     Write-Ok "$($service.Id) instalado (inicia sozinho com o Windows)"
 }
 
 Write-Step '8/9 Firewall e backup diario'
-$port = [int]((Read-DotEnv)['PORT'])
+$envValues = Read-DotEnv
+$port = [int]$envValues['PORT']
 if (-not $port) { $port = 3000 }
-$ruleName = "Higi Leito PRO (TCP $port)"
-if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Domain, Private | Out-Null
+if ($envValues['HOST'] -eq '127.0.0.1') {
+    Write-Ok "HOST=127.0.0.1: a porta $port fica so interna (acesso pelo proxy, veja deploy\windows\proxy)"
+} else {
+    $ruleName = "Higi Leito PRO (TCP $port)"
+    if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Domain, Private | Out-Null
+    }
+    Write-Ok "Porta $port liberada para a rede do dominio/privada"
 }
-Write-Ok "Porta $port liberada para a rede do dominio/privada"
 
 $backupScript = Join-Path $PSScriptRoot 'backup.ps1'
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$backupScript`""

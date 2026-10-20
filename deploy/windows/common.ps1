@@ -13,6 +13,9 @@ $Services = @(
 )
 $WinSwUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe'
 $WinSwSha256 = '05B82D46AD331CC16BDC00DE5C6332C1EF818DF8CEEFCD49C726553209B3A0DA'
+$ProxyServiceId = "$ServicePrefix-Proxy"
+$CaddyUrl = 'https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_windows_amd64.zip'
+$CaddySha256 = '0A1EDC0B799512051C57071CE0E798D3F2CF67DC98171366F1D2B326072E3B06'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 function Write-Step([string]$Message) {
@@ -27,6 +30,19 @@ function Assert-Administrator {
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Abra o PowerShell com "Executar como administrador" e rode o script de novo.'
+    }
+}
+
+# Roda um programa externo capturando stdout e stderr como texto. No PowerShell 5.1,
+# "2>&1" com ErrorActionPreference=Stop transforma qualquer linha de stderr (ex.: logs
+# normais do Caddy) em erro fatal; aqui isso fica desligado so durante o comando.
+function Invoke-Native([scriptblock]$Command) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Command 2>&1 | ForEach-Object { "$_" }
+    } finally {
+        $ErrorActionPreference = $previous
     }
 }
 
@@ -103,7 +119,20 @@ function Get-AppUrl([string]$HostName = 'localhost') {
     $envValues = Read-DotEnv
     $port = $(if ($envValues['PORT']) { $envValues['PORT'] } else { '3000' })
     $protocol = $(if ($envValues['HIGI_TLS_PFX_PATH']) { 'https' } else { 'http' })
-    return "${protocol}://${HostName}:$port"
+    $basePath = $(if ($envValues['HIGI_BASE_PATH']) { $envValues['HIGI_BASE_PATH'].TrimEnd('/') } else { '' })
+    return "${protocol}://${HostName}:$port$basePath"
+}
+
+function Test-TcpPort([string]$HostName, [int]$Port) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $connect = $client.BeginConnect($HostName, $Port, $null, $null)
+        return ($connect.AsyncWaitHandle.WaitOne(2000) -and $client.Connected)
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
 }
 
 function Wait-AppHealth([int]$TimeoutSeconds = 60) {
@@ -140,16 +169,19 @@ function Install-WinSw {
     return $template
 }
 
-function Write-ServiceConfig($Service, [string]$NodePath, [string]$PostgresService) {
+function ConvertTo-XmlText([string]$Text) { return [System.Security.SecurityElement]::Escape($Text) }
+
+# Gera o XML do WinSW. $Depend vazio = o servico nao depende de outro.
+function Write-ServiceConfig($Service, [string]$Executable, [string]$Arguments, [string]$Depend) {
+    $dependXml = $(if ($Depend) { "`n  <depend>$(ConvertTo-XmlText $Depend)</depend>" } else { '' })
     $xml = @"
 <service>
   <id>$($Service.Id)</id>
-  <name>$($Service.Name)</name>
-  <description>$($Service.Description)</description>
-  <executable>$NodePath</executable>
-  <arguments>$($Service.Script)</arguments>
-  <workingdirectory>$Root</workingdirectory>
-  <depend>$PostgresService</depend>
+  <name>$(ConvertTo-XmlText $Service.Name)</name>
+  <description>$(ConvertTo-XmlText $Service.Description)</description>
+  <executable>$(ConvertTo-XmlText $Executable)</executable>
+  <arguments>$(ConvertTo-XmlText $Arguments)</arguments>
+  <workingdirectory>$(ConvertTo-XmlText $Root)</workingdirectory>$dependXml
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
   <onfailure action="restart" delay="5 sec" />
@@ -158,7 +190,7 @@ function Write-ServiceConfig($Service, [string]$NodePath, [string]$PostgresServi
   <resetfailure>1 hour</resetfailure>
   <stoptimeout>20 sec</stoptimeout>
   <env name="NODE_ENV" value="production" />
-  <logpath>$LogsDir</logpath>
+  <logpath>$(ConvertTo-XmlText $LogsDir)</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>10</keepFiles>

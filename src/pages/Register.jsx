@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { safeReturnTo } from '@/lib/authReturnTo';
+import { appUrl } from '@/lib/basePath';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ export default function Register() {
     setLoading(true);
     try {
       await db.auth.register({ email, password });
-      window.location.href = safeReturnTo();
+      window.location.href = appUrl(safeReturnTo());
     } catch (registrationError) {
       setError(registrationError.message || 'Não foi possível criar a conta.');
     } finally {
