@@ -57,4 +57,17 @@ export default [
       "react-hooks/rules-of-hooks": "error",
     },
   },
+  {
+    files: ["server/**/*.js", "vite.config.js"],
+    ...pluginJs.configs.recommended,
+    languageOptions: {
+      globals: globals.node,
+      ecmaVersion: 2024,
+      sourceType: "module",
+    },
+    rules: {
+      ...pluginJs.configs.recommended.rules,
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", ignoreRestSiblings: true }],
+    },
+  },
 ];
