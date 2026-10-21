@@ -24,18 +24,19 @@ $pgBin = Get-PostgresBin
 $pgService = Get-PostgresServiceName
 Write-Ok "PostgreSQL em $pgBin (servico $pgService)"
 
-Write-Step '3/9 Arquivo de configuracao (.env)'
-# Um .env que ainda tem a senha de exemplo veio de uma tentativa que falhou no meio: refaz.
-if ((Test-Path $EnvFile) -and ((Read-DotEnv)['DATABASE_URL'] -match 'TROQUE_A_SENHA')) {
-    Write-Warn '.env incompleto de uma tentativa anterior; configurando de novo.'
-    Remove-Item $EnvFile -Force
-}
-if (Test-Path $EnvFile) {
-    Write-Ok '.env ja existe; mantido como esta.'
+Write-Step '3/9 Banco de dados e arquivo .env'
+$existingEnv = Read-DotEnv
+if ($existingEnv['DATABASE_URL'] -and $existingEnv['DATABASE_URL'] -notmatch 'TROQUE_A_SENHA') {
+    Write-Ok '.env ja tem DATABASE_URL; banco mantido como esta.'
 } else {
     $pgPort = Get-PostgresPort
     Write-Host "    PostgreSQL atendendo na porta $pgPort."
-    $adminEmail = (Read-Host 'E-mail do administrador de TI (usado para criar o primeiro acesso)').Trim().ToLower()
+    $adminEmail = $existingEnv['HIGI_ADMIN_EMAIL']
+    if ($adminEmail) {
+        Write-Ok "Administrador de TI do .env: $adminEmail"
+    } else {
+        $adminEmail = (Read-Host 'E-mail do administrador de TI (usado para criar o primeiro acesso)').Trim().ToLower()
+    }
 
     # Testa a senha antes de qualquer alteracao; mostra o erro real do PostgreSQL se falhar.
     $superPlain = $null
@@ -73,15 +74,28 @@ if (Test-Path $EnvFile) {
         Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     }
 
-    # So agora o .env e criado: se algo acima falhar, a proxima tentativa recomeca do zero.
-    Copy-Item (Join-Path $Root '.env.example') $EnvFile
+    # So agora o .env e gravado: se algo acima falhar, a proxima tentativa recomeca deste passo.
+    # Um .env criado a mao e mantido; so recebe as linhas que faltam.
+    $createdEnv = -not (Test-Path $EnvFile)
+    if ($createdEnv) { Copy-Item (Join-Path $Root '.env.example') $EnvFile }
     Set-DotEnvValue 'DATABASE_URL' "postgres://higi_app:$appPassword@127.0.0.1:$pgPort/higi_leito"
     Set-DotEnvValue 'HIGI_ADMIN_EMAIL' $adminEmail
-    Write-Ok 'Banco criado e .env gerado.'
-    Write-Host ''
-    Write-Host '    Agora preencha a parte do Oracle/MV no .env (copie do seu .env.local antigo).' -ForegroundColor Yellow
-    Write-Host '    O Bloco de Notas vai abrir. Salve, feche e volte aqui.' -ForegroundColor Yellow
-    Start-Process notepad.exe $EnvFile -Wait
+    Write-Ok 'Banco criado e DATABASE_URL gravada no .env.'
+    if ($createdEnv) {
+        Write-Host ''
+        Write-Host '    Agora preencha a parte do Oracle/MV no .env (copie do seu .env.local antigo).' -ForegroundColor Yellow
+        Write-Host '    O Bloco de Notas vai abrir. Salve, feche e volte aqui.' -ForegroundColor Yellow
+        Start-Process notepad.exe $EnvFile -Wait
+    }
+}
+
+$oracleLibDir = (Read-DotEnv)['HIGI_ORACLE_CLIENT_LIB_DIR']
+if ($oracleLibDir) {
+    if (-not (Test-Path (Join-Path $oracleLibDir 'oci.dll'))) {
+        Write-Warn "HIGI_ORACLE_CLIENT_LIB_DIR nao tem oci.dll: $oracleLibDir. A sincronizacao com o MV vai falhar ate corrigir."
+    } elseif ($oracleLibDir -like 'C:\Users\*') {
+        Write-Warn 'O Oracle Instant Client esta dentro da pasta de um usuario. Prefira copia-lo para C:\Oracle (veja docs\DEPLOY.md, passo 3).'
+    }
 }
 
 Write-Step '4/9 Instalando dependencias (npm ci)'
