@@ -45,9 +45,19 @@ Navegadores na rede do hospital
 2. Na instalação:
    - Componentes: deixe **PostgreSQL Server** e **Command Line Tools** marcados (o pgAdmin é opcional; o Stack Builder pode desmarcar).
    - **Senha do superusuário `postgres`**: crie uma senha forte e **guarde-a** (no cofre de senhas da TI). O instalador do Higi vai pedi-la.
-   - Porta: **5432** (padrão).
+   - Porta: **5432** (padrão). Os scripts contam com ela.
+   - Pastas de instalação e de dados: pode deixar no `C:` ou escolher o `D:` (ex.: `D:\PostgreSQL\17` e
+     `D:\PostgreSQL\17\data`). Os scripts encontram o PostgreSQL pelo serviço do Windows, em qualquer disco.
+     Se o `D:` for o disco de dados do servidor, prefira deixar a pasta **data** nele.
    - Locale: pode deixar o padrão.
-3. O PostgreSQL fica instalado como serviço do Windows (`postgresql-x64-17`) e só aceita conexões do próprio servidor. Não abra a porta 5432 no firewall.
+3. O PostgreSQL fica instalado como serviço do Windows (`postgresql-x64-17`) e só aceita conexões do próprio servidor.
+   **Não abra a porta 5432 no firewall.** Para conferir se o instalador criou alguma regra liberando a porta:
+   ```powershell
+   Get-NetFirewallPortFilter | Where-Object LocalPort -eq 5432 | Get-NetFirewallRule | Select-Object DisplayName, Enabled, Action
+   ```
+   Se aparecer uma regra com `Enabled = True` e `Action = Allow`, desative-a com `Disable-NetFirewallRule -DisplayName "NOME"`.
+4. Se o instalador avisar que a porta 5432 já está em uso, já existe outro PostgreSQL no servidor (talvez de outro
+   projeto). **Pare e não reinstale por cima**: o Higi precisa ser ajustado para outra porta (ex.: 5433).
 
 ### Passo 3: Oracle Instant Client (integração com o MV)
 
@@ -60,12 +70,13 @@ A integração usa o Oracle Instant Client, igual à sua máquina hoje (`C:\Orac
 
 ### Passo 4: baixar o projeto
 
-Use uma pasta **sem espaços e sem acentos** no caminho, por exemplo `C:\HigiLeitoPro`:
+Use uma pasta **sem espaços e sem acentos** no caminho, em qualquer disco. Os exemplos deste guia usam
+`D:\HigiLeitoPro`:
 
 ```powershell
-cd C:\
+cd D:\
 git clone https://github.com/naok1m/Higi-LeitoPRO.git HigiLeitoPro
-cd C:\HigiLeitoPro
+cd D:\HigiLeitoPro
 ```
 
 > Se o repositório for privado, o Git vai pedir login. Use uma conta com acesso de leitura e, como senha, um
@@ -75,7 +86,7 @@ cd C:\HigiLeitoPro
 ### Passo 5: rodar o instalador
 
 ```powershell
-cd C:\HigiLeitoPro
+cd D:\HigiLeitoPro
 powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1
 ```
 
@@ -113,7 +124,7 @@ Rode um backup manual e confira se o arquivo `.dump` foi criado:
 powershell -ExecutionPolicy Bypass -File deploy\windows\backup.ps1
 ```
 
-Os backups vão para `C:\HigiLeitoPro\backups` e são mantidos por 14 dias. **Recomendado:** apontar
+Os backups vão para `D:\HigiLeitoPro\backups` e são mantidos por 14 dias. **Recomendado:** apontar
 `HIGI_BACKUP_DIR` no `.env` para uma pasta de rede **fora deste servidor** (peça à TI). Se o disco do servidor
 morrer, um backup que está nele mesmo não ajuda.
 
@@ -141,7 +152,7 @@ Para quem usa a FastAPI, os endereços continuam os mesmos. Nada no código da F
 ### Instalar
 
 ```powershell
-cd C:\HigiLeitoPro
+cd D:\HigiLeitoPro
 powershell -ExecutionPolicy Bypass -File deploy\windows\proxy\install-proxy.ps1
 ```
 
@@ -190,7 +201,7 @@ Na sua máquina: faça as alterações, rode os testes (`npm run test:server`) e
 No servidor:
 
 ```powershell
-cd C:\HigiLeitoPro
+cd D:\HigiLeitoPro
 powershell -ExecutionPolicy Bypass -File deploy\windows\update.ps1
 ```
 
@@ -229,7 +240,7 @@ Depois de mudar o `.env`, reinicie os dois serviços.
 ### Restaurar um backup
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\windows\restore.ps1 -BackupFile C:\HigiLeitoPro\backups\higi_leito_AAAAMMDD_HHMMSS.dump
+powershell -ExecutionPolicy Bypass -File deploy\windows\restore.ps1 -BackupFile D:\HigiLeitoPro\backups\higi_leito_AAAAMMDD_HHMMSS.dump
 ```
 
 **Apaga os dados atuais** e coloca os do backup no lugar. O script pede confirmação e faz um backup do estado atual antes.
@@ -245,6 +256,29 @@ powershell -ExecutionPolicy Bypass -File deploy\windows\restore.ps1 -BackupFile 
 | Leitos do MV não aparecem | `logs\HigiLeitoPro-Worker.err.log`. Mensagens de "Thick mode" indicam caminho errado do Instant Client em `HIGI_ORACLE_CLIENT_LIB_DIR`; mensagens `ORA-` são de conexão ou permissão no Oracle. |
 | Serviço fica reiniciando | `logs\*.err.log`. A causa mais comum é um erro no `.env`; a mensagem diz qual variável. |
 | "Frontend não encontrado" | Rode `npm run build` na pasta do projeto e reinicie a API. |
+
+### Senha do `postgres` não funciona
+
+O `install.ps1` mostra o erro exato do PostgreSQL. Conforme a mensagem:
+
+- **`password authentication failed for user "postgres"`**: a senha não confere. Causas comuns:
+  - **Teclado diferente no mstsc**: a sessão remota pode estar com layout US em vez de ABNT2, e aí símbolos como `@ ç ; / ?` saem trocados. Teste digitando a senha num Bloco de Notas no servidor.
+  - **Outro PostgreSQL no servidor** respondendo na porta (de outro projeto), com outra senha. Confira com:
+    ```powershell
+    Get-CimInstance Win32_Service -Filter "Name LIKE 'postgresql%'" | Select-Object Name, State, PathName
+    ```
+    Se aparecer mais de um, **não mexa no que não é do Higi** e peça ajuda antes de continuar.
+- **`Connection refused` / `could not connect`**: o serviço do PostgreSQL está parado (`services.msc`) ou em outra porta.
+
+**Redefinir a senha do `postgres`** (só se esse PostgreSQL foi instalado para o Higi):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\windows\reset-postgres-password.ps1
+```
+
+O script mostra qual PostgreSQL vai alterar e pede confirmação. Depois ele libera o acesso sem senha **só a partir do
+próprio servidor**, troca a senha e devolve a configuração original, mesmo se der erro no meio. Por fim, testa a
+senha nova.
 
 ## Segurança: o que já está feito e próximos passos
 

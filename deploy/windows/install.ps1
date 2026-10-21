@@ -25,32 +25,57 @@ $pgService = Get-PostgresServiceName
 Write-Ok "PostgreSQL em $pgBin (servico $pgService)"
 
 Write-Step '3/9 Arquivo de configuracao (.env)'
+# Um .env que ainda tem a senha de exemplo veio de uma tentativa que falhou no meio: refaz.
+if ((Test-Path $EnvFile) -and ((Read-DotEnv)['DATABASE_URL'] -match 'TROQUE_A_SENHA')) {
+    Write-Warn '.env incompleto de uma tentativa anterior; configurando de novo.'
+    Remove-Item $EnvFile -Force
+}
 if (Test-Path $EnvFile) {
     Write-Ok '.env ja existe; mantido como esta.'
 } else {
-    Copy-Item (Join-Path $Root '.env.example') $EnvFile
+    $pgPort = Get-PostgresPort
+    Write-Host "    PostgreSQL atendendo na porta $pgPort."
     $adminEmail = (Read-Host 'E-mail do administrador de TI (usado para criar o primeiro acesso)').Trim().ToLower()
-    $superPassword = Read-Host 'Senha do usuario "postgres" (definida ao instalar o PostgreSQL)' -AsSecureString
-    $superPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($superPassword))
+
+    # Testa a senha antes de qualquer alteracao; mostra o erro real do PostgreSQL se falhar.
+    $superPlain = $null
+    for ($attempt = 1; $attempt -le 3 -and -not $superPlain; $attempt++) {
+        $superPassword = Read-Host 'Senha do usuario "postgres" (definida ao instalar o PostgreSQL)' -AsSecureString
+        $candidate = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($superPassword))
+        $env:PGPASSWORD = $candidate
+        $test = Invoke-Native { & "$pgBin\psql.exe" -h 127.0.0.1 -p $pgPort -U postgres -d postgres -tAc 'SELECT 1' }
+        $testExit = $LASTEXITCODE
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+        if ($testExit -eq 0) {
+            $superPlain = $candidate
+        } else {
+            Write-Warn "O PostgreSQL recusou (tentativa $attempt de 3): $(($test | Select-Object -Last 2) -join ' ')"
+        }
+    }
+    if (-not $superPlain) {
+        throw 'Senha do usuario "postgres" nao aceita. Veja "Senha do postgres nao funciona" em docs\DEPLOY.md.'
+    }
     $appPassword = New-RandomSecret 32
 
     Write-Host '    Criando usuario "higi_app" e banco "higi_leito" no PostgreSQL...'
     $env:PGPASSWORD = $superPlain
     try {
         $roleSql = "DO `$`$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'higi_app') THEN CREATE ROLE higi_app LOGIN PASSWORD '$appPassword'; ELSE ALTER ROLE higi_app WITH LOGIN PASSWORD '$appPassword'; END IF; END `$`$;"
-        & "$pgBin\psql.exe" -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c $roleSql
+        & "$pgBin\psql.exe" -h 127.0.0.1 -p $pgPort -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c $roleSql
         Assert-ExitCode 'Criar o usuario do banco'
-        $exists = & "$pgBin\psql.exe" -h 127.0.0.1 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'higi_leito'"
+        $exists = & "$pgBin\psql.exe" -h 127.0.0.1 -p $pgPort -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'higi_leito'"
         Assert-ExitCode 'Consultar os bancos existentes'
         if (-not $exists) {
-            & "$pgBin\psql.exe" -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE higi_leito OWNER higi_app ENCODING 'UTF8' TEMPLATE template0"
+            & "$pgBin\psql.exe" -h 127.0.0.1 -p $pgPort -U postgres -d postgres -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE higi_leito OWNER higi_app ENCODING 'UTF8' TEMPLATE template0"
             Assert-ExitCode 'Criar o banco higi_leito'
         }
     } finally {
         Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     }
 
-    Set-DotEnvValue 'DATABASE_URL' "postgres://higi_app:$appPassword@127.0.0.1:5432/higi_leito"
+    # So agora o .env e criado: se algo acima falhar, a proxima tentativa recomeca do zero.
+    Copy-Item (Join-Path $Root '.env.example') $EnvFile
+    Set-DotEnvValue 'DATABASE_URL' "postgres://higi_app:$appPassword@127.0.0.1:$pgPort/higi_leito"
     Set-DotEnvValue 'HIGI_ADMIN_EMAIL' $adminEmail
     Write-Ok 'Banco criado e .env gerado.'
     Write-Host ''

@@ -87,16 +87,57 @@ function New-RandomSecret([int]$Length = 32) {
 }
 
 function Get-PostgresBin {
-    $candidates = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin\psql.exe' -ErrorAction SilentlyContinue |
+    # 1) Pasta do executavel do servico (funciona em qualquer disco, ex. D:\PostgreSQL\17).
+    $service = Get-PostgresService
+    if ($service) {
+        $bin = Get-PostgresBinFromServicePath $service.PathName
+        if ($bin -and (Test-Path (Join-Path $bin 'psql.exe'))) { return $bin }
+    }
+    # 2) Locais padrao do instalador, em todos os discos.
+    $patterns = foreach ($drive in (Get-PSDrive -PSProvider FileSystem).Root) {
+        Join-Path $drive 'Program Files\PostgreSQL\*\bin\psql.exe'
+        Join-Path $drive 'PostgreSQL\*\bin\psql.exe'
+    }
+    $candidates = Get-ChildItem $patterns -ErrorAction SilentlyContinue |
         Sort-Object { [int]($_.Directory.Parent.Name -replace '[^\d].*$', '') } -Descending
     if (-not $candidates) {
-        throw 'PostgreSQL nao encontrado em C:\Program Files\PostgreSQL. Instale o PostgreSQL 17 (veja docs\DEPLOY.md, passo 2).'
+        throw 'PostgreSQL nao encontrado (procurado pelo servico e em "<disco>:\Program Files\PostgreSQL"). Instale o PostgreSQL 17 (veja docs\DEPLOY.md, passo 2).'
     }
     return $candidates[0].Directory.FullName
 }
 
+# PathName do servico e algo como: "D:\PostgreSQL\17\bin\pg_ctl.exe" runservice -N "postgresql-x64-17" -D "D:\PostgreSQL\17\data" -w
+function Get-PostgresBinFromServicePath([string]$PathName) {
+    if ($PathName -match '^\s*"([^"]+)"') { $exe = $Matches[1] }
+    elseif ($PathName -match '^\s*(\S+)') { $exe = $Matches[1] }
+    else { return $null }
+    return Split-Path $exe -Parent
+}
+
+function Get-PostgresService {
+    $services = @(Get-CimInstance Win32_Service -Filter "Name LIKE 'postgresql%'" -ErrorAction SilentlyContinue)
+    if ($services.Count -gt 1) {
+        Write-Warn "Mais de um PostgreSQL instalado: $(($services.Name) -join ', '). Usando $($services[0].Name)."
+    }
+    return $services | Select-Object -First 1
+}
+
+# Porta configurada no postgresql.conf da pasta de dados do servico (-D "..."); padrao 5432.
+function Get-PostgresPort {
+    $service = Get-PostgresService
+    if ($service -and $service.PathName -match '-D\s+"([^"]+)"') {
+        $conf = Join-Path $Matches[1] 'postgresql.conf'
+        if (Test-Path $conf) {
+            foreach ($line in Get-Content $conf) {
+                if ($line -match '^\s*port\s*=\s*(\d+)') { return [int]$Matches[1] }
+            }
+        }
+    }
+    return 5432
+}
+
 function Get-PostgresServiceName {
-    $service = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    $service = Get-PostgresService
     if (-not $service) { throw 'O servico do PostgreSQL nao foi encontrado. Confira a instalacao do PostgreSQL.' }
     return $service.Name
 }
