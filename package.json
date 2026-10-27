@@ -1,7 +1,7 @@
 {
   "name": "higi-leito-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
     "node": ">=22.12"
@@ -18,7 +18,7 @@
     "db:import-json": "node server/scripts/import-json.js",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "test:server": "node --test --test-concurrency=1 server/test/",
+    "test:server": "node --test --test-concurrency=1 server/test/api.test.js server/test/basePath.test.js server/test/server.test.js",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview"
   },
@@ -61,13 +61,13 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.54.2",
     "react-resizable-panels": "^2.1.7",
-    "react-router-dom": "^6.26.0",
+    "react-router-dom": "^7.18.4",
     "recharts": "^2.15.4",
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
@@ -87,5 +87,8 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2",
     "vite": "^8.2.0"
+  },
+  "overrides": {
+    "postcss-selector-parser": "^7.1.6"
   }
 }

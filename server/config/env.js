@@ -19,7 +19,7 @@ const optionalText = z.preprocess(
 );
 
 const schema = z.object({
-  DATABASE_URL: z.string({ required_error: 'DATABASE_URL não foi configurada.' })
+  DATABASE_URL: z.string({ error: 'DATABASE_URL não foi configurada.' })
     .trim()
     .min(1, 'DATABASE_URL não foi configurada.')
     .refine((value) => /^postgres(ql)?:\/\//.test(value), 'DATABASE_URL deve começar com postgres://'),

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import BedCard, { STATUS } from '@/components/beds/BedCard';
+import OracleDischargePanel from '@/components/beds/OracleDischargePanel';
 import StartDialog from '@/components/beds/StartDialog';
 import MaterialCheckDialog from '@/components/materials/MaterialCheckDialog';
 import MissingAlert from '@/components/beds/MissingAlert';
@@ -58,6 +59,7 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível sincronizar o Oracle.'),
   });
   const taskByBed = Object.fromEntries((tasks?.items || []).map((t) => [t.bed_id, t]));
+  const visibleBeds = (beds?.items || []).filter((bed) => bed.status !== 'livre');
   const hygieneTasks = (tasks?.items || []).filter((task) =>
     task.workflow_stage === 'higienizacao' || !task.workflow_stage);
 
@@ -191,6 +193,7 @@ export default function Leitos() {
           </div>
         )}
       </div>
+      <OracleDischargePanel isLeader={isLeader} oracleConfigured={oracleStatus?.configured} />
       <MissingAlert />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(STATUS).map(([k, v]) => (
@@ -205,11 +208,13 @@ export default function Leitos() {
           <button key={u.id} onClick={() => setUnitId(u.id)} className={`px-4 h-10 rounded-full text-sm whitespace-nowrap border ${unitId === u.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600'}`}>{u.name}</button>
         ))}
       </div>
-      {isLoading ? <p className="text-slate-500">Carregando...</p> : (beds?.items || []).length === 0 ? (
-        <p className="text-slate-500 text-sm">Nenhum leito disponível. Os leitos são importados automaticamente do MV.</p>
+      {isLoading ? <p className="text-slate-500">Carregando...</p> : visibleBeds.length === 0 ? (
+        (beds?.items || []).length > 0
+          ? <p className="text-slate-500 text-sm">Nenhum leito pendente ou em processo de hotelaria.</p>
+          : <p className="text-slate-500 text-sm">Nenhum leito disponível. Os leitos são importados automaticamente do MV.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {beds.items.map((b) => (
+          {visibleBeds.map((b) => (
             <BedCard key={b.id} bed={b} task={taskByBed[b.id]} onStart={setStarting}
               isLeader={isLeader}
               busy={advance.isPending || confirmMvRelease.isPending || startStage.isPending

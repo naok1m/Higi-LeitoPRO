@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 
 const DefaultFallback = () => (
@@ -10,6 +10,7 @@ const DefaultFallback = () => (
 
 export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement, allowedRoles, redirectTo = '/' }) {
   const { isAuthenticated, isLoadingAuth, authChecked, checkUserAuth, user } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     if (!authChecked && !isLoadingAuth) {
@@ -23,6 +24,10 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
 
   if (!isAuthenticated) {
     return unauthenticatedElement;
+  }
+
+  if (user?.mustChangePassword && location.pathname !== '/trocar-senha') {
+    return <Navigate to="/trocar-senha" replace />;
   }
 
   const role = user?.role === 'user' ? 'manager' : user?.role;

@@ -78,8 +78,8 @@ test('enforces company memberships across reads, aggregates, writes and company 
   assert.deepEqual(adminLogin.payload.user.companies.map(({ id }) => id), ['1', '18', '19']);
 
   for (const account of [
-    { email: 'oto@example.test', companyIds: ['1'] },
-    { email: 'multi@example.test', companyIds: ['1', '18'] },
+    { name: 'Otoclínica Gestor', email: 'oto@example.test', companyIds: ['1'] },
+    { name: 'Gestor Multiempresa', email: 'multi@example.test', companyIds: ['1', '18'] },
   ]) {
     const created = await api('/api/admin/users', {
       method: 'POST',
@@ -260,6 +260,124 @@ test('enforces company memberships across reads, aggregates, writes and company 
   assert.equal(createdEmployee.payload.record.company_id, '18');
 });
 
+test('manages users with filters, temporary password changes, status and audit history', async () => {
+  const admin = await login('ti@example.test', 'senha-segura-admin');
+  const listed = await api('/api/admin/users?search=oto&role=manager&status=active&companyId=1&page=1&pageSize=10', {
+    cookie: admin.cookie,
+  });
+  assert.equal(listed.status, 200);
+  assert.equal(listed.payload.pagination.total, 1);
+  assert.equal(listed.payload.users[0].name, 'Otoclínica Gestor');
+  assert.ok(listed.payload.users[0].lastLogin);
+
+  const generatedAccount = await api('/api/admin/users', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { name: 'Conta com senha gerada', email: 'gerada@example.test', role: 'manager', companyIds: ['1'] },
+  });
+  assert.equal(generatedAccount.status, 201);
+  assert.equal(generatedAccount.payload.user.mustChangePassword, true);
+  assert.ok(generatedAccount.payload.temporaryPassword);
+
+  const allUsers = await api('/api/admin/users?search=&page=1&pageSize=25', { cookie: admin.cookie });
+  const primaryAdmin = allUsers.payload.users.find((user) => user.isPrimaryAdmin);
+  assert.ok(primaryAdmin);
+  const lockedEmail = await api(`/api/admin/users/${primaryAdmin.id}`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: { email: 'other-admin@example.test' },
+  });
+  assert.equal(lockedEmail.status, 409);
+  assert.equal(lockedEmail.payload.code, 'primary_admin_email_locked');
+
+  const account = listed.payload.users[0];
+  const editResponse = await api(`/api/admin/users/${account.id}`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: {
+      name: 'Gestora Atualizada',
+      email: 'gestora-atualizada@example.test',
+      registration: '12345678900',
+      role: 'manager',
+      companyIds: ['1', '18'],
+      active: true,
+    },
+  });
+  assert.equal(editResponse.status, 200);
+  assert.equal(editResponse.payload.user.name, 'Gestora Atualizada');
+  assert.equal(editResponse.payload.user.email, 'gestora-atualizada@example.test');
+  assert.equal(editResponse.payload.user.registration, '12345678900');
+  assert.deepEqual(editResponse.payload.user.companyIds, ['1', '18']);
+  const editedAccount = editResponse.payload.user;
+  const oldSession = await login(editedAccount.email, 'senha-segura-user');
+  const reset = await api(`/api/admin/users/${editedAccount.id}/reset-password`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: {},
+  });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.payload.user.mustChangePassword, true);
+  assert.ok(reset.payload.temporaryPassword);
+  assert.equal((await api('/api/auth/me', { cookie: oldSession.cookie })).payload.user, null);
+
+  const temporaryLogin = await login(editedAccount.email, reset.payload.temporaryPassword);
+  assert.equal(temporaryLogin.user.mustChangePassword, true);
+  const blockedRequest = await api('/api/entities/Bed/filter', {
+    method: 'POST',
+    cookie: temporaryLogin.cookie,
+    body: { query: {}, options: {} },
+  });
+  assert.equal(blockedRequest.status, 403);
+  assert.equal(blockedRequest.payload.code, 'password_change_required');
+  const weakPassword = await api('/api/auth/change-temporary-password', {
+    method: 'POST',
+    cookie: temporaryLogin.cookie,
+    body: { newPassword: 'weak' },
+  });
+  assert.equal(weakPassword.status, 400);
+  const changedPassword = await api('/api/auth/change-temporary-password', {
+    method: 'POST',
+    cookie: temporaryLogin.cookie,
+    body: { newPassword: 'Hosp!talSecure2026' },
+  });
+  assert.equal(changedPassword.status, 200);
+  const allowedRequest = await api('/api/entities/Bed/filter', {
+    method: 'POST',
+    cookie: temporaryLogin.cookie,
+    body: { query: {}, options: {} },
+  });
+  assert.equal(allowedRequest.status, 200);
+
+  const audit = await api(`/api/admin/users/${editedAccount.id}/audit`, { cookie: admin.cookie });
+  assert.equal(audit.status, 200);
+  assert.deepEqual(audit.payload.events.map(({ action }) => action), [
+    'password_changed',
+    'password_reset',
+    'updated',
+    'created',
+  ]);
+
+  const deactivated = await api(`/api/admin/users/${editedAccount.id}/status`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: { active: false },
+  });
+  assert.equal(deactivated.status, 200);
+  assert.equal(deactivated.payload.user.active, false);
+  const inactiveLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { email: editedAccount.email, password: 'Hosp!talSecure2026' },
+  });
+  assert.equal(inactiveLogin.status, 403);
+  const reactivated = await api(`/api/admin/users/${editedAccount.id}/status`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: { active: true },
+  });
+  assert.equal(reactivated.status, 200);
+  assert.equal(reactivated.payload.user.active, true);
+});
+
 test('stores only hashed session tokens and ends sessions on logout', async () => {
   const admin = await login('ti@example.test', 'senha-segura-admin');
   const rawToken = admin.cookie.split('=')[1];
@@ -274,12 +392,59 @@ test('stores only hashed session tokens and ends sessions on logout', async () =
   assert.equal(afterLogout.payload.user, null);
 });
 
+test('completes active tasks manually through the workflow API route', async () => {
+  const admin = await login('ti@example.test', 'senha-segura-admin');
+  const idleLimit = await api('/api/workflow/idle-limit', { cookie: admin.cookie });
+  assert.equal(idleLimit.status, 200);
+  assert.equal(idleLimit.payload.idleLimitMinutes, 180);
+  assert.equal(idleLimit.payload.operationLimitMinutes, 360);
+  const savedLimits = await api('/api/workflow/idle-limit', {
+    method: 'PUT',
+    cookie: admin.cookie,
+    body: { idleLimitMinutes: 90, operationLimitMinutes: 240 },
+  });
+  assert.equal(savedLimits.status, 200);
+  assert.equal(savedLimits.payload.idleLimitMinutes, 90);
+  assert.equal(savedLimits.payload.operationLimitMinutes, 240);
+
+  await seedEntities({
+    Bed: [{ id: 'manual-bed', company_id: '1', status: 'em_limpeza' }],
+    CleaningTask: [{
+      id: 'manual-task',
+      company_id: '1',
+      bed_id: 'manual-bed',
+      bed_code: '101',
+      status: 'em_andamento',
+      workflow_stage: 'higienizacao',
+      started_at: new Date(Date.now() - 60000).toISOString(),
+      requested_at: new Date(Date.now() - 120000).toISOString(),
+    }],
+  });
+
+  const completion = await api('/api/workflow/complete-manual', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { taskId: 'manual-task', reason: 'Conclusão validada pela liderança' },
+  });
+
+  assert.equal(completion.status, 200);
+  assert.equal(completion.payload.manuallyCompleted, true);
+  assert.equal(completion.payload.record.status, 'concluida');
+  assert.equal(completion.payload.record.manual_completion_reason, 'Conclusão validada pela liderança');
+  const beds = await api('/api/entities/Bed/filter', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { query: { id: 'manual-bed' }, options: {} },
+  });
+  assert.equal(beds.payload.items[0].status, 'livre');
+});
+
 test('runs the collaborator cleaning flow on scoped database operations', async () => {
   const admin = await login('ti@example.test', 'senha-segura-admin');
   const createdUser = await api('/api/admin/users', {
     method: 'POST',
     cookie: admin.cookie,
-    body: { email: 'colab@example.test', password: 'senha-colab', role: 'collaborator', companyIds: ['19'] },
+    body: { name: 'Maria Colaboradora', email: 'colab@example.test', password: 'senha-colab', role: 'collaborator', companyIds: ['19'] },
   });
   assert.equal(createdUser.status, 201);
   await api('/api/auth/switch-company', { method: 'POST', cookie: admin.cookie, body: { companyId: '19' } });
@@ -357,6 +522,26 @@ test('runs the collaborator cleaning flow on scoped database operations', async 
     [task.payload.record.id],
   );
   assert.deepEqual(rows, [{ actor_email: 'colab@example.test' }]);
+});
+
+test('restricts Oracle discharge and ad-hoc endpoints to authenticated leaders', async () => {
+  const anonymousForecast = await api('/api/oracle/discharge-forecast');
+  assert.equal(anonymousForecast.status, 401);
+  const anonymousRequest = await api('/api/oracle/ad-hoc-cleaning', {
+    method: 'POST',
+    body: { bedId: 'oracle-bed-1-501' },
+  });
+  assert.equal(anonymousRequest.status, 401);
+
+  const collaborator = await login('colab@example.test', 'senha-colab');
+  const collaboratorForecast = await api('/api/oracle/discharge-forecast', { cookie: collaborator.cookie });
+  assert.equal(collaboratorForecast.status, 403);
+  const collaboratorRequest = await api('/api/oracle/ad-hoc-cleaning', {
+    method: 'POST',
+    cookie: collaborator.cookie,
+    body: { bedId: 'oracle-bed-1-501', cleaningType: 1, observation: '' },
+  });
+  assert.equal(collaboratorRequest.status, 403);
 });
 
 test('imports and updates Oracle beds only when the MV data changes', async () => {

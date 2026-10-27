@@ -19,6 +19,7 @@ import Rouparia from '@/pages/Rouparia';
 import Estrutura from '@/pages/Estrutura';
 import Historico from '@/pages/Historico';
 import UserManagement from '@/pages/UserManagement';
+import ChangeTemporaryPassword from '@/pages/ChangeTemporaryPassword';
 import Monitoramento from '@/pages/Monitoramento';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -27,11 +28,11 @@ import LogoFooter from '@/components/LogoFooter';
 // Add page imports here
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, authError, isAuthenticated, checkUserAuth } = useAuth();
+  const { isLoadingAuth, authError, isAuthenticated, user, checkUserAuth } = useAuth();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!isAuthenticated) return undefined;
+    if (!isAuthenticated || user?.mustChangePassword) return undefined;
 
     const eventSource = new EventSource(appUrl('/api/events'));
     const refreshQueries = (event) => {
@@ -46,7 +47,7 @@ const AuthenticatedApp = () => {
       eventSource.removeEventListener('change', refreshQueries);
       eventSource.close();
     };
-  }, [isAuthenticated, queryClient, checkUserAuth]);
+  }, [isAuthenticated, user?.mustChangePassword, queryClient, checkUserAuth]);
 
   if (isLoadingAuth) {
     return (
@@ -77,6 +78,7 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route path="/trocar-senha" element={<ChangeTemporaryPassword />} />
         <Route element={<Layout />}>
           <Route element={<ProtectedRoute allowedRoles={['admin', 'manager']} redirectTo="role-home" />}>
             <Route path="/" element={<Leitos />} />

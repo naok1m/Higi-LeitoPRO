@@ -13,7 +13,8 @@ export const insertSession = async ({ tokenHash, userId, activeCompanyId, expire
 export const findSessionWithUser = async (tokenHash, db = getPool()) => {
   const { rows } = await db.query(
     `select s.token_hash, s.active_company_id, s.expires_at,
-            u.id, u.email, u.role, u.company_ids, u.active, u.password_hash, u.password_salt, u.profile
+            u.id, u.email, u.role, u.company_ids, u.active, u.password_hash, u.password_salt,
+            u.profile, u.last_login, u.must_change_password
        from sessions s
        join users u on u.id = s.user_id
       where s.token_hash = $1`,

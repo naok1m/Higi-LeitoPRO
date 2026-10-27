@@ -7,6 +7,7 @@ import WaitingReport from '@/components/reports/WaitingReport';
 import TimeReport from '@/components/reports/TimeReport';
 import PerformanceReport from '@/components/reports/PerformanceReport';
 import ProcessReport from '@/components/reports/ProcessReport';
+import LogoFooter from '@/components/LogoFooter';
 
 const dateInputValue = (date) => {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -63,6 +64,7 @@ export default function Relatorios() {
         <TabsContent value="best"><PerformanceReport period={period} mode="best" /></TabsContent>
         <TabsContent value="worst"><PerformanceReport period={period} mode="worst" /></TabsContent>
       </Tabs>
+      <div className="hidden print:block print-report-footer"><LogoFooter /></div>
     </div>
   );
 }

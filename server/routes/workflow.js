@@ -1,11 +1,14 @@
-import { getAdvanceWorkflowChanges } from '../../src/lib/bedWorkflow.js';
+import { getAdvanceWorkflowChanges, getManualCompletionChanges } from '../../src/lib/bedWorkflow.js';
 import { updateEntities } from '../db/entityStore.js';
 import { ApiError } from '../http/errors.js';
 import { readJsonBody, sendJson } from '../http/io.js';
 import { isOracleConfigured, releaseOracleBed } from '../integrations/oracle.js';
+import { getState, setState } from '../repositories/appState.js';
 import { getEntityRecords, getRecordCompanyId, getTenantRecords, getUserRole } from '../services/access.js';
 import { getSessionUser } from '../services/authSessions.js';
 import { publishChange } from '../services/changes.js';
+
+const IDLE_LIMIT_SETTINGS_KEY = 'workflow_idle_limits';
 
 // Revisão: o processo (por id) e todos os leitos da empresa ativa.
 const reviewScope = (companyId, taskId) => ({
@@ -15,10 +18,66 @@ const reviewScope = (companyId, taskId) => ({
 });
 
 export const workflowHandler = async (request, response, url) => {
+  if (url.pathname === '/api/workflow/idle-limit') {
+    if (!['GET', 'PUT'].includes(request.method)) {
+      throw new ApiError(404, 'not_found', 'Rota de configuração do limite de ociosidade não encontrada.');
+    }
+    const actor = await getSessionUser(request);
+    if (!actor) {
+      throw new ApiError(401, 'unauthorized', 'Entre na sua conta para acessar a configuração de ociosidade.');
+    }
+    if (request.method === 'GET') {
+      const settings = await getState(IDLE_LIMIT_SETTINGS_KEY) || {};
+      const idleLimits = settings.idleLimitMinutesByCompany || {};
+      const operationLimits = settings.operationLimitMinutesByCompany || {};
+      const idleLimitMinutes = idleLimits[actor.activeCompanyId];
+      const operationLimitMinutes = operationLimits[actor.activeCompanyId];
+      sendJson(response, 200, {
+        idleLimitMinutes: Number.isInteger(idleLimitMinutes) && idleLimitMinutes >= 1 && idleLimitMinutes <= 180
+          ? idleLimitMinutes
+          : 180,
+        operationLimitMinutes: Number.isInteger(operationLimitMinutes)
+          && operationLimitMinutes >= 1 && operationLimitMinutes <= 720
+          ? operationLimitMinutes
+          : 360,
+      });
+      return;
+    }
+    if (!['admin', 'manager'].includes(getUserRole(actor))) {
+      throw new ApiError(403, 'forbidden', 'Somente administradores e gestores podem configurar o limite de ociosidade.');
+    }
+    const { idleLimitMinutes, operationLimitMinutes } = await readJsonBody(request);
+    if (!Number.isInteger(idleLimitMinutes) || idleLimitMinutes < 1 || idleLimitMinutes > 180) {
+      throw new ApiError(400, 'invalid_idle_limit', 'O limite de ociosidade deve ser de 1 minuto a 3 horas.');
+    }
+    if (operationLimitMinutes !== undefined
+      && (!Number.isInteger(operationLimitMinutes) || operationLimitMinutes < 1 || operationLimitMinutes > 720)) {
+      throw new ApiError(400, 'invalid_operation_limit', 'O limite de operação deve ser de 1 minuto a 12 horas.');
+    }
+    const settings = await getState(IDLE_LIMIT_SETTINGS_KEY) || {};
+    const idleLimits = settings.idleLimitMinutesByCompany || {};
+    const operationLimits = settings.operationLimitMinutesByCompany || {};
+    idleLimits[actor.activeCompanyId] = idleLimitMinutes;
+    if (operationLimitMinutes !== undefined) {
+      operationLimits[actor.activeCompanyId] = operationLimitMinutes;
+    }
+    await setState(IDLE_LIMIT_SETTINGS_KEY, {
+      idleLimitMinutesByCompany: idleLimits,
+      operationLimitMinutesByCompany: operationLimits,
+    });
+    await publishChange({ event: 'workflow.settings_changed', actor, companyId: actor.activeCompanyId });
+    sendJson(response, 200, {
+      idleLimitMinutes,
+      operationLimitMinutes: operationLimitMinutes ?? 360,
+    });
+    return;
+  }
+
   const isManualMvConfirmation = url.pathname === '/api/workflow/confirm-mv-release';
-  if (!['/api/workflow/complete-review', '/api/workflow/confirm-mv-release'].includes(url.pathname)
+  const isManualCompletion = url.pathname === '/api/workflow/complete-manual';
+  if (!['/api/workflow/complete-review', '/api/workflow/confirm-mv-release', '/api/workflow/complete-manual'].includes(url.pathname)
     || request.method !== 'POST') {
-    throw new ApiError(404, 'not_found', 'Rota de conclusão da revisão não encontrada.');
+    throw new ApiError(404, 'not_found', 'Rota de conclusão do processo não encontrada.');
   }
   const actor = await getSessionUser(request);
   if (!actor) {
@@ -27,13 +86,59 @@ export const workflowHandler = async (request, response, url) => {
   if (!['admin', 'manager'].includes(getUserRole(actor))) {
     throw new ApiError(403, 'forbidden', 'Somente a liderança de hotelaria pode concluir a revisão.');
   }
-  const { taskId } = await readJsonBody(request);
+  const { taskId, reason } = await readJsonBody(request);
   if (typeof taskId !== 'string' || !taskId) {
     throw new ApiError(400, 'invalid_task', 'Informe o processo que será concluído.');
+  }
+  if (isManualCompletion && (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 1000)) {
+    throw new ApiError(400, 'invalid_completion_reason', 'Informe um motivo de conclusão manual com até 1000 caracteres.');
   }
   const now = new Date();
   const timestamp = now.toISOString();
   const reviewerName = actor.name || actor.email;
+  if (isManualCompletion) {
+    const result = await updateEntities(reviewScope(actor.activeCompanyId, taskId), (database) => {
+      const tasks = getEntityRecords(database, 'CleaningTask');
+      const task = tasks.find((record) =>
+        record.id === taskId && getRecordCompanyId(record) === actor.activeCompanyId);
+      if (!task) throw new ApiError(404, 'task_not_found', 'O processo não foi encontrado.');
+      if (task.status !== 'em_andamento') {
+        throw new ApiError(409, 'task_not_active', 'Este processo não está mais em andamento.');
+      }
+      const changes = getManualCompletionChanges(task, reason, reviewerName, now);
+      const updatedTask = { ...task, ...changes.taskUpdates, updated_date: timestamp };
+      const beds = getEntityRecords(database, 'Bed');
+      const bed = beds.find((record) =>
+        record.id === task.bed_id && getRecordCompanyId(record) === actor.activeCompanyId);
+      const updatedBed = bed ? { ...bed, status: 'livre', updated_date: timestamp } : null;
+      database.entities.CleaningTask = tasks.map((record) => record.id === taskId ? updatedTask : record);
+      if (updatedBed) {
+        database.entities.Bed = beds.map((record) => record.id === bed.id ? updatedBed : record);
+      }
+      return { task: updatedTask, previousTask: task, bed: updatedBed, previousBed: bed || null };
+    });
+
+    await publishChange({
+      event: 'entity.updated',
+      entity: 'CleaningTask',
+      record: result.task,
+      previousRecord: result.previousTask,
+      changedFields: Object.keys(result.task).filter((field) => result.task[field] !== result.previousTask[field]),
+      actor,
+    });
+    if (result.bed) {
+      await publishChange({
+        event: 'bed.status_changed',
+        entity: 'Bed',
+        record: result.bed,
+        previousRecord: result.previousBed,
+        changedFields: ['status'],
+        actor,
+      });
+    }
+    sendJson(response, 200, { record: result.task, manuallyCompleted: true });
+    return;
+  }
   if (isManualMvConfirmation) {
     const result = await updateEntities(reviewScope(actor.activeCompanyId, taskId), (database) => {
       const tasks = getEntityRecords(database, 'CleaningTask');

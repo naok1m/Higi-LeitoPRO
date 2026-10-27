@@ -1,5 +1,3 @@
-import { appUrl } from '@/lib/basePath';
-
 const STORAGE_PREFIX = 'higi-leito-pro';
 const ENTITY_STORAGE_KEY = `${STORAGE_PREFIX}:entities`;
 const ENTITY_MIGRATION_KEY = `${STORAGE_PREFIX}:shared-entities-migrated`;
@@ -7,10 +5,16 @@ const ENTITY_MIGRATION_KEY = `${STORAGE_PREFIX}:shared-entities-migrated`;
 const ENTITY_NAMES = ['Bed', 'CleaningTask', 'Employee', 'Material', 'MaterialCheck', 'Unit'];
 let localEntitiesMigration;
 
+/** @typedef {Error & { status?: number; code?: string }} ApiError */
+
+/**
+ * @param {string} url
+ * @param {{ method?: string; body?: unknown }} options
+ */
 const apiRequest = async (url, { method = 'GET', body } = {}) => {
   let response;
   try {
-    response = await fetch(appUrl(url), {
+    response = await fetch(url, {
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -27,6 +31,7 @@ const apiRequest = async (url, { method = 'GET', body } = {}) => {
     throw new Error('O servidor compartilhado retornou uma resposta inválida.');
   }
   if (!response.ok) {
+    /** @type {ApiError} */
     const error = new Error(payload.error || 'Não foi possível concluir a operação no servidor compartilhado.');
     error.status = response.status;
     error.code = payload.code;
@@ -134,11 +139,18 @@ const auth = {
   async resetPassword({ resetToken, newPassword }) {
     await authRequest('reset-password', { resetToken, newPassword });
   },
+
+  async changeTemporaryPassword(newPassword) {
+    await authRequest('change-temporary-password', { newPassword });
+  },
 };
 
 const admin = {
-  async users() {
-    return apiRequest('/api/admin/users');
+  async users(filters = {}) {
+    const query = new URLSearchParams(
+      Object.entries(filters).filter(([, value]) => value !== '' && value !== null && value !== undefined),
+    );
+    return apiRequest(`/api/admin/users?${query}`);
   },
 
   async createUser(values) {
@@ -148,11 +160,41 @@ const admin = {
   async updateUser(id, values) {
     return apiRequest(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: values });
   },
+
+  async updateUserStatus(id, active) {
+    return apiRequest(`/api/admin/users/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: { active },
+    });
+  },
+
+  async resetUserPassword(id) {
+    return apiRequest(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, {
+      method: 'PATCH',
+      body: {},
+    });
+  },
+
+  async userAudit(id) {
+    return apiRequest(`/api/admin/users/${encodeURIComponent(id)}/audit`);
+  },
 };
 
 const oracle = {
   async status() {
     return apiRequest('/api/oracle/status');
+  },
+
+  async dischargeForecast() {
+    return apiRequest('/api/oracle/discharge-forecast');
+  },
+
+  async occupiedBeds() {
+    return apiRequest('/api/oracle/occupied-beds');
+  },
+
+  async requestAdHocCleaning(values) {
+    return apiRequest('/api/oracle/ad-hoc-cleaning', { method: 'POST', body: values });
   },
 
   async sync() {
@@ -161,6 +203,17 @@ const oracle = {
 };
 
 const workflow = {
+  async getIdleLimit() {
+    return apiRequest('/api/workflow/idle-limit');
+  },
+
+  async updateIdleLimit(idleLimitMinutes, operationLimitMinutes) {
+    return apiRequest('/api/workflow/idle-limit', {
+      method: 'PUT',
+      body: { idleLimitMinutes, operationLimitMinutes },
+    });
+  },
+
   async completeReview(taskId) {
     return apiRequest('/api/workflow/complete-review', {
       method: 'POST',
@@ -172,6 +225,13 @@ const workflow = {
     return apiRequest('/api/workflow/confirm-mv-release', {
       method: 'POST',
       body: { taskId },
+    });
+  },
+
+  async completeManually(taskId, reason) {
+    return apiRequest('/api/workflow/complete-manual', {
+      method: 'POST',
+      body: { taskId, reason },
     });
   },
 };

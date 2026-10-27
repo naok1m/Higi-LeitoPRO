@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { getSessionToken, sessionDurationMs } from '../http/io.js';
 import { sessionUserFromRow } from '../repositories/users.js';
+import { ApiError } from '../http/errors.js';
 import {
   deleteSession,
   deleteUserSessions,
@@ -42,6 +43,15 @@ export const getSessionUser = async (request) => {
   if (user.active === false) {
     await deleteSession(tokenHash);
     return null;
+  }
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+  const allowedDuringPasswordChange = [
+    '/api/auth/me',
+    '/api/auth/logout',
+    '/api/auth/change-temporary-password',
+  ];
+  if (user.mustChangePassword && !allowedDuringPasswordChange.includes(pathname)) {
+    throw new ApiError(403, 'password_change_required', 'Altere a senha temporária antes de continuar.');
   }
   let activeCompanyId = session.active_company_id;
   const companyIds = getUserCompanyIds(user);

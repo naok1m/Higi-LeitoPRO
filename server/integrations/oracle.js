@@ -20,6 +20,34 @@ const cleaningBedsQuery = `
    order by dh_solicitacao
 `;
 
+const dischargeForecastQuery = `
+  select cd_leito,
+         ds_leito,
+         sn_alta_medica,
+         cd_atendimento,
+         dh_alta_medica,
+         situacao_alta
+    from ygor_hubce.vw_higienizacao_agendamentos
+   where cd_multi_empresa = :empresa
+   order by dh_alta_medica
+`;
+
+const occupiedBedsQuery = `
+  select cd_leito,
+         ds_leito,
+         ds_enfermaria,
+         tipo_acomodacao,
+         cd_unid_int,
+         unidade_internacao,
+         setor,
+         situacao_leito,
+         cd_atendimento,
+         cd_solic_avulsa_aberta
+    from ygor_hubce.vw_higi_leitos_ocupados
+   where cd_multi_empresa = :empresa
+   order by unidade_internacao, ds_leito
+`;
+
 let config = null;
 let poolPromise = null;
 let thickModeInitialized = false;
@@ -98,6 +126,108 @@ export const fetchOracleCleaningBeds = async (companyCode) => {
       { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     return result.rows || [];
+  } finally {
+    await connection.close();
+  }
+};
+
+export const fetchOracleDischargeForecast = async (companyCode) => {
+  if (!config?.companyCodes.includes(Number(companyCode))) {
+    throw new Error('A empresa solicitada não está habilitada na integração Oracle.');
+  }
+  const pool = await getPool();
+  const connection = await pool.getConnection();
+  connection.callTimeout = 30000;
+  try {
+    const result = await connection.execute(
+      dischargeForecastQuery,
+      { empresa: Number(companyCode) },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return result.rows || [];
+  } finally {
+    await connection.close();
+  }
+};
+
+export const isOracleAdHocBedAvailable = (bed) => {
+  const bedSituation = String(bed?.SITUACAO_LEITO || '').trim().toLocaleUpperCase('pt-BR');
+  return ['OCUPADO', 'OCUPADO (INFECCAO)'].includes(bedSituation)
+    && (bed.CD_SOLIC_AVULSA_ABERTA === null || bed.CD_SOLIC_AVULSA_ABERTA === undefined);
+};
+
+export const fetchOracleOccupiedBeds = async (companyCode) => {
+  if (!config?.companyCodes.includes(Number(companyCode))) {
+    throw new Error('A empresa solicitada não está habilitada na integração Oracle.');
+  }
+  const pool = await getPool();
+  const connection = await pool.getConnection();
+  connection.callTimeout = 30000;
+  try {
+    const result = await connection.execute(
+      occupiedBedsQuery,
+      { empresa: Number(companyCode) },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    return result.rows || [];
+  } finally {
+    await connection.close();
+  }
+};
+
+export const requestOracleAdHocCleaning = async ({
+  companyCode,
+  bedCode,
+  operatorLogin,
+  cleaningType,
+  observation,
+}) => {
+  if (!config?.companyCodes.includes(Number(companyCode))) {
+    throw new Error('A empresa solicitada não está habilitada na integração Oracle.');
+  }
+  if (!Number.isSafeInteger(Number(bedCode)) || Number(bedCode) <= 0 || !operatorLogin?.trim()) {
+    throw new Error('O leito e o login do operador são obrigatórios para solicitar a limpeza avulsa.');
+  }
+  if (cleaningType !== null && ![1, 3].includes(cleaningType)) {
+    throw new Error('O tipo de limpeza deve ser terminal (1), concorrente (3) ou não informado.');
+  }
+  if (typeof observation !== 'string' || observation.length > 1000) {
+    throw new Error('A observação deve ter no máximo 1000 caracteres.');
+  }
+
+  const pool = await getPool();
+  const connection = await pool.getConnection();
+  connection.callTimeout = 30000;
+  try {
+    const result = await connection.execute(
+      `declare
+         v_cd_solic number;
+       begin
+         ygor_hubce.prc_solic_avulsa_higienizacao(
+           p_cd_multi_empresa => :empresa,
+           p_cd_leito => :cd_leito,
+           p_nm_usuario => :login_operador,
+           p_cd_tipo_limpeza => :cd_tipo_limpeza,
+           p_ds_observacao => :observacao,
+           p_cd_solic_limpeza => v_cd_solic
+         );
+         commit;
+         :cd_solic_limpeza := v_cd_solic;
+       exception
+         when others then
+           rollback;
+           raise;
+       end;`,
+      {
+        empresa: Number(companyCode),
+        cd_leito: Number(bedCode),
+        login_operador: operatorLogin.trim(),
+        cd_tipo_limpeza: { val: cleaningType, type: oracledb.NUMBER },
+        observacao: { val: observation.trim() || null, type: oracledb.STRING },
+        cd_solic_limpeza: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      },
+    );
+    return result.outBinds?.cd_solic_limpeza ?? null;
   } finally {
     await connection.close();
   }

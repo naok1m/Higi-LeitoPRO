@@ -294,7 +294,7 @@ Já está feito:
 Recomendado em seguida, com a TI:
 1. **HTTPS**: peça à TI um certificado (`.pfx`) para o nome do servidor, coloque o caminho em `HIGI_TLS_PFX_PATH` e a senha em `HIGI_TLS_PFX_PASSPHRASE`, e reinicie a API. O endereço passa a ser `https://...`.
 2. **Backups fora do servidor** (`HIGI_BACKUP_DIR` numa pasta de rede).
-3. **Usuário Oracle só com o necessário**: leitura na view `vw_higienizacao_leitos` e execução da procedure de liberação.
+3. **Usuário Oracle só com o necessário**: leitura nas views `vw_higienizacao_leitos` e `vw_higienizacao_agendamentos`, e execução das procedures de liberação e solicitação avulsa.
 4. Os serviços rodam como **LocalSystem**. Para endurecer, a TI pode criar uma conta de serviço dedicada
    com permissão só na pasta do projeto e configurá-la em `services.msc` (aba "Logon").
 

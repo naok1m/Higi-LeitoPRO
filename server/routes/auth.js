@@ -13,16 +13,49 @@ import {
   listUsers,
   lockUsers,
   saveUser,
+  updateUserLastLogin,
 } from '../repositories/users.js';
+import { recordUserAudit } from '../repositories/userAudit.js';
 import { getSessionUserData, getUserCompanyIds, getUserRole, publicUser } from '../services/access.js';
 import { createSession, getRequestTokenHash, getSessionUser, revokeUserSessions } from '../services/authSessions.js';
 import { publishChange } from '../services/changes.js';
-import { makePasswordCredentials, passwordsMatch } from '../services/passwords.js';
+import { isStrongPassword, makePasswordCredentials, passwordsMatch } from '../services/passwords.js';
 import { closeEventClients } from '../services/realtime.js';
 
 export const authHandler = async (request, response, url) => {
   if (request.method === 'GET' && url.pathname === '/api/auth/me') {
     sendJson(response, 200, { user: await getSessionUser(request) });
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/auth/change-temporary-password') {
+    const actor = await getSessionUser(request);
+    if (!actor) throw new ApiError(401, 'unauthorized', 'Entre na sua conta para alterar a senha.');
+    if (!actor.mustChangePassword) {
+      throw new ApiError(409, 'password_change_not_required', 'Esta conta não precisa trocar a senha temporária.');
+    }
+    const { newPassword } = await readJsonBody(request);
+    if (!isStrongPassword(newPassword)) {
+      throw new ApiError(400, 'weak_password', 'Use pelo menos 12 caracteres, com letras maiúsculas, minúsculas, número e símbolo.');
+    }
+    const credentials = await makePasswordCredentials(newPassword);
+    await withTransaction(async (client) => {
+      const user = await findUserById(actor.id, client);
+      if (!user?.mustChangePassword) {
+        throw new ApiError(409, 'password_change_not_required', 'Esta conta não precisa trocar a senha temporária.');
+      }
+      if (await passwordsMatch(newPassword, user)) {
+        throw new ApiError(400, 'password_reuse', 'A nova senha deve ser diferente da senha temporária.');
+      }
+      Object.assign(user, credentials, { mustChangePassword: false });
+      await saveUser(user, client);
+      await recordUserAudit({
+        userId: user.id,
+        actor,
+        action: 'password_changed',
+      }, client);
+    });
+    sendJson(response, 200, { success: true });
     return;
   }
 
@@ -112,6 +145,7 @@ export const authHandler = async (request, response, url) => {
       throw new ApiError(401, 'invalid_credentials', 'E-mail ou senha inválidos.');
     }
 
+    await updateUserLastLogin(user.id);
     const activeCompanyId = getUserCompanyIds(user)[0];
     const token = await createSession(user.id, activeCompanyId);
     sendJson(response, 200, {

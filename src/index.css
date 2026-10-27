@@ -81,7 +81,7 @@
 
 @page {
   size: landscape;
-  margin: 10mm;
+  margin: 10mm 10mm 22mm;
 }
 
 @media print {
@@ -148,6 +148,17 @@
 
   .report-table-scroll {
     overflow: visible !important;
+  }
+
+  .print-report-footer {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+
+  .print-report-footer footer {
+    padding: 0;
   }
 }
 

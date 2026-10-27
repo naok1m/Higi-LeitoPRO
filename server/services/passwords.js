@@ -12,6 +12,14 @@ export const makePasswordCredentials = async (password) => {
   return { passwordSalt, passwordHash: await hashPassword(password, passwordSalt) };
 };
 
+export const isStrongPassword = (password) =>
+  typeof password === 'string'
+  && password.length >= 12
+  && /[a-z]/.test(password)
+  && /[A-Z]/.test(password)
+  && /\d/.test(password)
+  && /[^A-Za-z0-9]/.test(password);
+
 export const passwordsMatch = async (password, user) => {
   const candidate = Buffer.from(await hashPassword(password, user.passwordSalt), 'hex');
   const expected = Buffer.from(user.passwordHash, 'hex');

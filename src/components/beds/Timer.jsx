@@ -8,7 +8,7 @@ export function formatDuration(total) {
   return `${h}:${m}:${sec}`;
 }
 
-export default function Timer({ startedAt, stoppedAt = null, initialSeconds = 0, className = '' }) {
+export default function Timer({ startedAt, stoppedAt = null, initialSeconds = 0, limitMinutes = null, className = '' }) {
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 1000);
@@ -16,5 +16,11 @@ export default function Timer({ startedAt, stoppedAt = null, initialSeconds = 0,
   }, []);
   const end = stoppedAt ? new Date(stoppedAt).getTime() : Date.now();
   const elapsed = (Number(initialSeconds) || 0) + (end - new Date(startedAt).getTime()) / 1000;
-  return <span className={`font-mono tabular-nums ${className}`}>{formatDuration(elapsed)}</span>;
+  const limitReached = Number.isFinite(limitMinutes) && elapsed >= limitMinutes * 60;
+  return (
+    <span className={`font-mono tabular-nums ${limitReached ? 'text-red-700' : ''} ${className}`}>
+      {formatDuration(elapsed)}
+      {limitReached && <span className="ml-1 text-[10px] font-sans font-semibold">Limite de operação</span>}
+    </span>
+  );
 }

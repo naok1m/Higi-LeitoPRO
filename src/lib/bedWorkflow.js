@@ -118,6 +118,45 @@ export const getAdvanceWorkflowChanges = (task, reviewerName, now = new Date()) 
   throw new Error('Retome o processo após a manutenção antes de avançar a etapa.');
 };
 
+export const getManualCompletionChanges = (task, reason, completedBy, now = new Date()) => {
+  const trimmedReason = reason?.trim();
+  if (!trimmedReason) throw new Error('Informe o motivo da conclusão manual.');
+  if (task?.status !== 'em_andamento') throw new Error('Este processo não está em andamento.');
+
+  const timestamp = now.toISOString();
+  const activeStage = getWorkflowStage(task);
+  const stageDurations = ['higienizacao', 'rouparia', 'revisao'].map((stage) => {
+    const duration = stage === activeStage && activeStage !== 'manutencao'
+      ? getStageDurationSeconds(task, stage, now.getTime())
+      : Number(task[`${stage}_duration_seconds`]) || 0;
+    return [stage, duration];
+  });
+  const idleDurations = ['higienizacao', 'rouparia', 'revisao'].map((stage) => {
+    const duration = stage === activeStage && activeStage !== 'manutencao'
+      ? getStageIdleSeconds(task, stage, now.getTime())
+      : Number(task[`${stage}_idle_seconds`]) || 0;
+    return [stage, duration];
+  });
+  const maintenanceSeconds = Number(task.maintenance_total_seconds) || 0;
+  const hospitalitySeconds = getHospitalityDurationSeconds(task, now.getTime());
+
+  return {
+    taskUpdates: {
+      status: 'concluida',
+      finished_at: timestamp,
+      completion_method: 'manual',
+      manual_completion_reason: trimmedReason,
+      manual_completed_by: completedBy,
+      ...(activeStage !== 'manutencao' ? { [`${activeStage}_finished_at`]: timestamp } : { maintenance_completed_at: timestamp }),
+      ...Object.fromEntries(stageDurations.map(([stage, duration]) => [`${stage}_duration_seconds`, duration])),
+      ...Object.fromEntries(idleDurations.map(([stage, duration]) => [`${stage}_idle_seconds`, duration])),
+      active_duration_seconds: stageDurations.reduce((total, [, duration]) => total + Number(duration), 0),
+      idle_duration_seconds: idleDurations.reduce((total, [, duration]) => total + Number(duration), 0),
+      duration_seconds: Math.max(0, hospitalitySeconds - maintenanceSeconds),
+    },
+  };
+};
+
 export const getMaintenanceWorkflowChanges = (task, reason, requestedBy, now = new Date()) => {
   if (getWorkflowStage(task) === 'manutencao') {
     throw new Error('A manutenção deste leito já está em andamento.');
