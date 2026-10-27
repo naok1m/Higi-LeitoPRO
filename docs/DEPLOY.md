@@ -252,6 +252,7 @@ powershell -ExecutionPolicy Bypass -File deploy\windows\restore.ps1 -BackupFile 
 | Sintoma | O que verificar |
 |---|---|
 | Página não abre nos outros computadores | `status.ps1`; firewall do Windows (regra "Higi Leito PRO"); antivírus/firewall da rede; usar o nome ou IP certo do servidor. |
+| Página abre, mas aparece "Não foi possível acessar o servidor compartilhado" | Se o Higi estiver publicado em `/higi`, confirme `HIGI_BASE_PATH=/higi` no `.env` do servidor e execute `update.ps1` para reconstruir o frontend com o prefixo correto. Teste `http://NOME-DO-SERVIDOR:8000/higi/api/health`; deve responder `{"status":"ok"}`. |
 | `/api/health` responde `database_unavailable` | Serviço `postgresql-x64-17` parado (`services.msc`) ou `DATABASE_URL` errada no `.env`. |
 | Leitos do MV não aparecem | `logs\HigiLeitoPro-Worker.err.log`. Mensagens de "Thick mode" indicam caminho errado do Instant Client em `HIGI_ORACLE_CLIENT_LIB_DIR`; mensagens `ORA-` são de conexão ou permissão no Oracle. |
 | Serviço fica reiniciando | `logs\*.err.log`. A causa mais comum é um erro no `.env`; a mensagem diz qual variável. |

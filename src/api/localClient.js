@@ -1,3 +1,5 @@
+import { appUrl } from '@/lib/basePath';
+
 const STORAGE_PREFIX = 'higi-leito-pro';
 const ENTITY_STORAGE_KEY = `${STORAGE_PREFIX}:entities`;
 const ENTITY_MIGRATION_KEY = `${STORAGE_PREFIX}:shared-entities-migrated`;
@@ -14,7 +16,7 @@ let localEntitiesMigration;
 const apiRequest = async (url, { method = 'GET', body } = {}) => {
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetch(appUrl(url), {
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
