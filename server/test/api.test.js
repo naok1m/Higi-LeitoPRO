@@ -260,6 +260,47 @@ test('enforces company memberships across reads, aggregates, writes and company 
   assert.equal(createdEmployee.payload.record.company_id, '18');
 });
 
+test('lists all active-company beds and manages lost-and-found records', async () => {
+  const admin = await login('ti@example.test', 'senha-segura-admin');
+  const beds = await api('/api/entities/Bed/filter', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { query: {}, options: { sort: 'code' } },
+  });
+  assert.equal(beds.status, 200);
+  assert.ok(beds.payload.items.some((bed) => bed.code === '101'));
+
+  const created = await api('/api/entities/LostFoundItem/create', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: {
+      event_type: 'achado',
+      description: 'Chave encontrada',
+      location: 'Quarto 101',
+      bed_code: '101',
+    },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.payload.record.bed_code, '101');
+  assert.equal(created.payload.record.status, 'aberto');
+
+  const listed = await api('/api/entities/LostFoundItem/filter', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { query: { status: 'aberto' }, options: { sort: '-reported_at' } },
+  });
+  assert.equal(listed.status, 200);
+  assert.ok(listed.payload.items.some((item) => item.id === created.payload.record.id));
+
+  const resolved = await api(`/api/entities/LostFoundItem/record/${created.payload.record.id}`, {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: { status: 'resolvido', resolved_at: new Date().toISOString() },
+  });
+  assert.equal(resolved.status, 200);
+  assert.equal(resolved.payload.record.status, 'resolvido');
+});
+
 test('manages users with filters, temporary password changes, status and audit history', async () => {
   const admin = await login('ti@example.test', 'senha-segura-admin');
   const listed = await api('/api/admin/users?search=oto&role=manager&status=active&companyId=1&page=1&pageSize=10', {

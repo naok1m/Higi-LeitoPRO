@@ -12,7 +12,12 @@ export default function LostFoundPanel() {
   const [eventType, setEventType] = useState('achado');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
-  const [bedCode, setBedCode] = useState('');
+  const [bedId, setBedId] = useState('');
+  const { data: beds, isLoading: bedsLoading, isError: bedsError, error: bedsErrorMessage } = useQuery({
+    queryKey: ['beds', 'lost-found'],
+    queryFn: () => db.entities.Bed.filter({}, { sort: 'code' }),
+  });
+  const bedItems = beds?.items || [];
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['lost-found'],
     queryFn: () => db.entities.LostFoundItem.filter({ status: 'aberto' }, { sort: '-reported_at', limit: 100 }),
@@ -26,7 +31,7 @@ export default function LostFoundPanel() {
     onSuccess: () => {
       setDescription('');
       setLocation('');
-      setBedCode('');
+      setBedId('');
       refresh();
       toast.success('Registro de achados e perdidos salvo.');
     },
@@ -52,7 +57,13 @@ export default function LostFoundPanel() {
       </header>
       <form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => {
         event.preventDefault();
-        createItem.mutate({ event_type: eventType, description, location, bed_code: bedCode });
+        const selectedBed = bedItems.find((bed) => bed.id === bedId);
+        createItem.mutate({
+          event_type: eventType,
+          description,
+          location,
+          bed_code: selectedBed?.code || '',
+        });
       }}>
         <label className="grid gap-1 text-sm text-slate-600">
           Tipo
@@ -63,9 +74,22 @@ export default function LostFoundPanel() {
         </label>
         <label className="grid gap-1 text-sm text-slate-600">
           Leito (opcional)
-          <input value={bedCode} onChange={(event) => setBedCode(event.target.value)} maxLength={50}
-            className="h-10 rounded-md border px-3 text-slate-900" placeholder="Código do leito" />
+          <select value={bedId} onChange={(event) => setBedId(event.target.value)}
+            disabled={bedsLoading || bedsError}
+            className="h-10 rounded-md border bg-white px-3 text-slate-900 disabled:opacity-70">
+            <option value="">Não associar a um leito</option>
+            {bedItems.map((bed) => (
+              <option key={bed.id} value={bed.id}>
+                {bed.code}{bed.unit_name ? ` · ${bed.unit_name}` : ''}
+              </option>
+            ))}
+          </select>
         </label>
+        {bedsError && (
+          <p role="alert" className="text-sm text-red-700 md:col-span-2">
+            Não foi possível carregar os leitos: {bedsErrorMessage.message}
+          </p>
+        )}
         <label className="grid gap-1 text-sm text-slate-600">
           Descrição
           <input value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} required

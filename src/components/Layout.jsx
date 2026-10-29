@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 const items = [
   { to: '/', label: 'Leitos', icon: BedDouble },
   { to: '/solicitacoes', label: 'Limpeza', icon: ClipboardList },
-  { to: '/rouparia', label: 'Hotelaria', icon: Shirt, roles: ['admin', 'manager', 'collaborator', 'rouparia'] },
+  { to: '/rouparia', label: 'Rouparia', icon: Shirt, roles: ['admin', 'manager', 'collaborator', 'rouparia'] },
   { to: '/monitoramento', label: 'Monitoramento', icon: Activity, roles: ['admin', 'manager'] },
   { to: '/equipe', label: 'Equipe', icon: Users },
   { to: '/estrutura', label: 'Unidades', icon: Building2, labels: { manager: 'Utensílios' }, icons: { manager: Package } },
@@ -52,7 +52,7 @@ export default function Layout() {
         <div className="mb-8">
           <p className="text-xs tracking-widest text-primary font-semibold">HIGIENIZAÇÃO</p>
           <h1 className="text-xl font-semibold text-slate-900">
-            {role === 'collaborator' ? 'Área de Limpeza' : role === 'rouparia' ? 'Liderança de Hotelaria' : 'Controle de Leitos'}
+            {role === 'collaborator' ? 'Área de Limpeza' : role === 'rouparia' ? 'Liderança de Rouparia' : 'Controle de Leitos'}
           </h1>
         </div>
         <nav className="flex-1 space-y-1">

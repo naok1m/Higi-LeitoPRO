@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import IdleTimer from './IdleTimer';
 import Timer from './Timer';
 import WorkflowActions from './WorkflowActions';
 import { getWorkflowStage, WORKFLOW_STAGES } from '@/lib/bedWorkflow';
@@ -19,7 +20,7 @@ export const STATUS = {
 export default function BedCard({
   bed, task, onStart, onSetStatus, isLeader, onStartStage,
   onAdvance, onConfirmMvRelease, onReportMaintenance, onResumeMaintenance, onCheckMaterials,
-  busy, checkingMaterials, canHandleRouparia,
+  busy, checkingMaterials, canHandleRouparia, idleLimitMinutes = 180,
 }) {
   const stage = getWorkflowStage(task);
   const s = STATUS[bed.status] || STATUS.livre;
@@ -45,6 +46,17 @@ export default function BedCard({
           Solicitação de higienização sem código no MV.
         </p>
       )}
+      {bed.status === 'aguardando_limpeza' && task?.status !== 'em_andamento'
+        && Number.isFinite(Date.parse(bed.oracle_requested_at || bed.updated_date)) && (
+          <div>
+            <p className="text-[10px] uppercase opacity-70">Ociosidade aguardando limpeza</p>
+            <IdleTimer
+              startedAt={bed.oracle_requested_at || bed.updated_date}
+              limitMinutes={idleLimitMinutes}
+              className="text-xl font-semibold"
+            />
+          </div>
+        )}
       {task?.status === 'em_andamento' && stage !== 'manutencao' && stageStartedAt && (
         <div>
           <Timer startedAt={stageStartedAt}
@@ -57,9 +69,10 @@ export default function BedCard({
       {task?.status === 'em_andamento' && stage !== 'manutencao' && !stageStartedAt && (
         <div>
           <p className="text-[10px] uppercase opacity-70">Ocioso antes de {WORKFLOW_STAGES[stage]?.toLowerCase()}</p>
-          <Timer startedAt={task[`${stage}_idle_started_at`] || task[stage === 'rouparia' ? 'higienizacao_finished_at' : 'rouparia_finished_at']}
+          <IdleTimer startedAt={task[`${stage}_idle_started_at`] || task[stage === 'rouparia' ? 'higienizacao_finished_at' : 'rouparia_finished_at']}
             stoppedAt={task.maintenance_started_at}
             initialSeconds={Number(task[`${stage}_idle_seconds`]) || 0}
+            limitMinutes={idleLimitMinutes}
             className="text-xl font-semibold" />
         </div>
       )}

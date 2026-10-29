@@ -4,7 +4,7 @@ const STORAGE_PREFIX = 'higi-leito-pro';
 const ENTITY_STORAGE_KEY = `${STORAGE_PREFIX}:entities`;
 const ENTITY_MIGRATION_KEY = `${STORAGE_PREFIX}:shared-entities-migrated`;
 
-const ENTITY_NAMES = ['Bed', 'CleaningTask', 'Employee', 'Material', 'MaterialCheck', 'Unit'];
+const ENTITY_NAMES = ['Bed', 'CleaningTask', 'Employee', 'LostFoundItem', 'Material', 'MaterialCheck', 'Unit'];
 let localEntitiesMigration;
 
 /** @typedef {Error & { status?: number; code?: string }} ApiError */

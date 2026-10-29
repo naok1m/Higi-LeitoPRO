@@ -8,9 +8,14 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { projectRoot } from '../config/env.js';
 
 const databaseDir = path.join(projectRoot, '.dev-db');
+const port = Number(process.env.HIGI_DEV_DB_PORT ?? 54320);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error('HIGI_DEV_DB_PORT deve ser uma porta válida.');
+}
+
 const postgres = new EmbeddedPostgres({
   databaseDir,
-  port: 54320,
+  port,
   user: 'postgres',
   password: 'postgres',
   persistent: true,
@@ -23,7 +28,7 @@ if (!existsSync(path.join(databaseDir, 'PG_VERSION'))) {
 } else {
   await postgres.start();
 }
-console.log('PostgreSQL de desenvolvimento em postgres://postgres:postgres@127.0.0.1:54320/higi_leito');
+console.log(`PostgreSQL de desenvolvimento em postgres://postgres:postgres@127.0.0.1:${port}/higi_leito`);
 console.log('Ctrl+C para parar.');
 
 const stop = async () => {

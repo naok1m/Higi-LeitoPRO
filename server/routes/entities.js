@@ -209,7 +209,7 @@ export const entityHandler = async (request, response, url) => {
   }
 
   if (request.method === 'POST' && action === 'create') {
-    const values = await readJsonBody(request);
+    let values = await readJsonBody(request);
     if (!values || typeof values !== 'object' || Array.isArray(values)) {
       throw new ApiError(400, 'invalid_record', 'Os dados do registro são inválidos.');
     }
@@ -236,6 +236,30 @@ export const entityHandler = async (request, response, url) => {
     if (entity === 'MaterialCheck' && !['admin', 'manager'].includes(actorRole)) {
       throw new ApiError(403, 'forbidden', 'Somente a liderança de hotelaria pode registrar a conferência de utensílios.');
     }
+    const now = new Date().toISOString();
+    if (entity === 'LostFoundItem') {
+      if (!['admin', 'manager'].includes(actorRole)) {
+        throw new ApiError(403, 'forbidden', 'Somente administradores e gestores podem registrar achados e perdidos.');
+      }
+      if (!['achado', 'perdido'].includes(values.event_type)
+        || typeof values.description !== 'string' || !values.description.trim()
+        || values.description.trim().length > 300
+        || typeof values.location !== 'string' || !values.location.trim()
+        || values.location.trim().length > 200
+        || (values.bed_code !== undefined
+          && (typeof values.bed_code !== 'string' || values.bed_code.trim().length > 50))) {
+        throw new ApiError(400, 'invalid_lost_found_item', 'Informe o tipo, a descrição e o local do item.');
+      }
+      values = {
+        event_type: values.event_type,
+        description: values.description.trim(),
+        location: values.location.trim(),
+        ...(values.bed_code?.trim() ? { bed_code: values.bed_code.trim() } : {}),
+        reported_by: actor.name || actor.email,
+        reported_at: now,
+        status: 'aberto',
+      };
+    }
     if (entity === 'Employee') {
       const registration = typeof values.registration === 'string' ? values.registration.trim() : '';
       if (typeof values.name !== 'string' || !values.name.trim()
@@ -245,7 +269,6 @@ export const entityHandler = async (request, response, url) => {
       values.name = values.name.trim();
       values.registration = registration;
     }
-    const now = new Date().toISOString();
     const defaults = entity === 'Bed' ? { status: 'livre', missing_count: 0 }
       : entity === 'Employee' || entity === 'Material' ? { active: true }
         : {};
@@ -383,6 +406,12 @@ export const entityHandler = async (request, response, url) => {
       throw new ApiError(400, 'invalid_record', 'Os dados do registro são inválidos.');
     }
     assertActiveCompany(values.company_id, actor);
+    if (entity === 'LostFoundItem'
+      && (Object.keys(values).some((field) => !['status', 'resolved_at'].includes(field))
+        || values.status !== 'resolvido' || typeof values.resolved_at !== 'string'
+        || !Number.isFinite(Date.parse(values.resolved_at)))) {
+      throw new ApiError(400, 'invalid_lost_found_update', 'Só é permitido registrar a resolução do item.');
+    }
     if (entity === 'Unit' && actorRole !== 'admin') {
       throw new ApiError(403, 'forbidden', 'Somente o administrador de TI pode gerenciar unidades.');
     }

@@ -47,6 +47,10 @@ export default function Leitos() {
     enabled: isLeader,
     refetchInterval: 5000,
   });
+  const { data: idleLimit, isError: idleLimitError, error: idleLimitErrorMessage } = useQuery({
+    queryKey: ['idle-limit'],
+    queryFn: db.workflow.getIdleLimit,
+  });
 
   const refresh = () => ['beds', 'active-tasks', 'bed-counts', 'missing-items', 'requests', 'structure-beds'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   const syncOracle = useMutation({
@@ -193,6 +197,11 @@ export default function Leitos() {
           </div>
         )}
       </div>
+      {idleLimitError && (
+        <p role="alert" className="text-sm text-red-700">
+          Não foi possível carregar o limite de ociosidade: {idleLimitErrorMessage.message}
+        </p>
+      )}
       <OracleDischargePanel isLeader={isLeader} oracleConfigured={oracleStatus?.configured} />
       <MissingAlert />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -226,6 +235,7 @@ export default function Leitos() {
               onResumeMaintenance={(task) => resumeMaintenance.mutate(task)}
               onCheckMaterials={(task) => setChecking(task)}
               checkingMaterials={checkMaterials.isPending}
+              idleLimitMinutes={idleLimit?.idleLimitMinutes ?? 180}
               canHandleRouparia={false}
               onSetStatus={(bed, status) => setStatus.mutate({ bed, status })} />
           ))}

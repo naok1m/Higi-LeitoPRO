@@ -1,7 +1,7 @@
 import { companies, companyById } from '../config/companies.js';
 import { ApiError } from '../http/errors.js';
 
-export const entityNames = ['Bed', 'CleaningTask', 'Employee', 'Material', 'MaterialCheck', 'Unit'];
+export const entityNames = ['Bed', 'CleaningTask', 'Employee', 'LostFoundItem', 'Material', 'MaterialCheck', 'Unit'];
 export const userRoles = ['admin', 'manager', 'collaborator', 'rouparia'];
 
 export const publicUser = ({ passwordHash, passwordSalt, ...user }) => user;
