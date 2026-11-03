@@ -59,7 +59,7 @@ export const normalizeOracleCleaningRow = (row, companyCode) => {
       code: stringValue(row.DS_LEITO) || bedOracleCode,
       unit_id: unitId,
       unit_name: unitName,
-      status: 'aguardando_limpeza',
+      status: 'aguardando_limupserpeza',
       oracle_source: 'oracle',
       oracle_company_code: companyCode,
       oracle_cd_leito: bedOracleCode,
@@ -79,7 +79,7 @@ export const normalizeOracleCleaningRow = (row, companyCode) => {
 
 // Só os processos em andamento são carregados: a sincronização apenas consulta
 // essas tarefas e nunca as altera.
-export const upsertOracleCleaningBeds = async (rows, companyCode) => updateEntities({
+export const tOracleCleaningBeds = async (rows, companyCode) => updateEntities({
   entities: ['Unit', 'Bed', 'CleaningTask'],
   companyId: companies.find((item) => item.oracleCode === companyCode)?.id,
   filters: { CleaningTask: [{ status: 'em_andamento' }] },

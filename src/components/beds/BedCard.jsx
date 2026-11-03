@@ -14,7 +14,7 @@ export const STATUS = {
   aguardando_revisao: { label: 'Aguardando revisão', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
   em_revisao: { label: 'Em revisão', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
   aguardando_manutencao: { label: 'Aguardando manutenção', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  livre: { label: 'Livre / Limpo', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  livre: { label: 'Ocupado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
 export default function BedCard({
