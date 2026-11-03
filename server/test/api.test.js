@@ -608,6 +608,33 @@ test('imports and updates Oracle beds only when the MV data changes', async () =
   assert.ok(database.entities.Unit.some(({ id }) => id === 'oracle-unit-1-7'));
 });
 
+test('does not import Oracle beds without a cleaning request and clears old vacant-bed cards', async () => {
+  await seedEntities({
+    Bed: [{
+      id: 'oracle-bed-1-502',
+      company_id: '1',
+      code: '502A',
+      status: 'aguardando_limpeza',
+      oracle_source: 'oracle',
+      oracle_company_code: 1,
+      oracle_cd_leito: '502',
+      oracle_request_id: null,
+      oracle_request_missing: true,
+    }],
+  });
+
+  assert.deepEqual(await upsertOracleCleaningBeds([
+    { CD_LEITO: 502, DS_LEITO: '502A', CD_SOLIC_LIMPEZA: null },
+    { CD_LEITO: 503, DS_LEITO: '503A', CD_SOLIC_LIMPEZA: '' },
+  ], 1), { imported: 0, updated: 1 });
+
+  const database = await readEntities({ entities: ['Bed'], companyId: '1' });
+  const oldVacantBed = database.entities.Bed.find(({ id }) => id === 'oracle-bed-1-502');
+  assert.equal(oldVacantBed.status, 'livre');
+  assert.equal(oldVacantBed.oracle_request_missing, false);
+  assert.equal(database.entities.Bed.some(({ id }) => id === 'oracle-bed-1-503'), false);
+});
+
 test('refuses to touch entities outside the loaded scope', async () => {
   await assert.rejects(
     updateEntities({ entities: ['Bed'], companyId: '1' }, (database) => database.entities.CleaningTask),

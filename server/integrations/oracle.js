@@ -17,7 +17,8 @@ const cleaningBedsQuery = `
          etapa_mv
     from ygor_hubce.vw_higienizacao_leitos
    where cd_multi_empresa = :empresa
-   order by dh_solicitacao
+      and cd_solic_limpeza is not null
+    order by dh_solicitacao
 `;
 
 const dischargeForecastQuery = `

@@ -33,6 +33,7 @@ export const normalizeOracleCleaningRow = (row, companyCode) => {
   const bedOracleCode = stringValue(row.CD_LEITO);
   if (!bedOracleCode) return null;
   const requestId = stringValue(row.CD_SOLIC_LIMPEZA);
+  if (!requestId) return null;
   const requestedAt = row.DH_SOLICITACAO instanceof Date
     ? row.DH_SOLICITACAO.toISOString()
     : stringValue(row.DH_SOLICITACAO) || null;
@@ -71,7 +72,7 @@ export const normalizeOracleCleaningRow = (row, companyCode) => {
       oracle_sector_code: stringValue(row.CD_SETOR) || null,
       oracle_sector_name: stringValue(row.SETOR) || null,
       oracle_mv_stage: stringValue(row.ETAPA_MV) || null,
-      oracle_request_missing: !requestId,
+      oracle_request_missing: false,
     },
   };
 };
@@ -148,6 +149,25 @@ export const upsertOracleCleaningBeds = async (rows, companyCode) => updateEntit
       updated += 1;
       changed = true;
     }
+  }
+
+  const activeRequestBedIds = new Set(normalized.map(({ bed }) => bed.id));
+  for (const bed of beds) {
+    if (bed.oracle_source !== 'oracle'
+      || bed.oracle_company_code !== companyCode
+      || !bed.oracle_request_missing
+      || bed.status !== 'aguardando_limpeza'
+      || activeRequestBedIds.has(bed.id)) continue;
+    const activeTask = activeTasks.find((task) =>
+      task.bed_id === bed.id && getRecordCompanyId(task) === bed.company_id);
+    if (activeTask) continue;
+    Object.assign(bed, {
+      status: 'livre',
+      oracle_request_missing: false,
+      updated_date: new Date().toISOString(),
+    });
+    updated += 1;
+    changed = true;
   }
 
   if (!changed) return NO_DATABASE_CHANGE;
