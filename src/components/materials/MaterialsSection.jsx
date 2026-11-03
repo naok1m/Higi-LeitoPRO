@@ -27,7 +27,9 @@ export default function MaterialsSection() {
     onError: (requestError) => toast.error(requestError.message || 'Não foi possível cadastrar o utensílio.'),
   });
   const toggle = useMutation({
-    mutationFn: (m) => db.entities.Material.update(m.id, { active: !m.active }),
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { id: string; active: boolean }>} */ (
+      (m) => db.entities.Material.update(m.id, { active: !m.active })
+    ),
     onSuccess: refresh,
     onError: (requestError) => toast.error(requestError.message || 'Não foi possível alterar o utensílio.'),
   });

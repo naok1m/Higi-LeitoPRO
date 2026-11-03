@@ -15,6 +15,12 @@ import {
   getResumeMaintenanceChanges,
 } from '@/lib/bedWorkflow';
 
+/**
+ * @typedef {{ id: string; code: string; unit_name: string; status: string }} BedRecord
+ * @typedef {{ id: string; name: string }} EmployeeRecord
+ * @typedef {{ id: string; bed_id: string; workflow_stage?: string; [key: string]: any }} CleaningTaskRecord
+ */
+
 const toIso = (d) => (/[zZ]|[+-]\d\d:?\d\d$/.test(d) ? d : `${d}Z`);
 
 export default function Solicitacoes() {
@@ -37,7 +43,7 @@ export default function Solicitacoes() {
     task.workflow_stage === 'higienizacao' || !task.workflow_stage);
 
   const start = useMutation({
-    mutationFn: async ({ bed, employee, type }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { bed: BedRecord; employee: EmployeeRecord; type: string }>} */ (async ({ bed, employee, type }) => {
       const startedAt = new Date().toISOString();
       await db.entities.CleaningTask.create({
         bed_id: bed.id, bed_code: bed.code, unit_name: bed.unit_name, employee_id: employee.id,
@@ -45,12 +51,12 @@ export default function Solicitacoes() {
         higienizacao_started_at: startedAt, started_at: startedAt, mv_sync_status: 'pendente',
       });
       await db.entities.Bed.update(bed.id, { status: 'em_limpeza' });
-    },
+    }),
     onSuccess: () => { setStarting(null); refresh(); toast.success('Processo de hotelaria iniciado'); },
     onError: (error) => toast.error(error.message || 'Não foi possível iniciar a limpeza.'),
   });
   const advance = useMutation({
-    mutationFn: async (task) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<{ mvReleased?: boolean } | undefined, CleaningTaskRecord>} */ (async (task) => {
       if (task.workflow_stage === 'revisao') {
         return db.workflow.completeReview(task.id);
       }
@@ -58,7 +64,7 @@ export default function Solicitacoes() {
       const changes = getAdvanceWorkflowChanges(task, reviewerName);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: (result, task) => {
       refresh();
       toast.success(task.workflow_stage === 'revisao'
@@ -68,11 +74,11 @@ export default function Solicitacoes() {
     onError: (error) => toast.error(error.message || 'Não foi possível avançar o processo.'),
   });
   const reportMaintenance = useMutation({
-    mutationFn: async ({ task, reason }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; reason: string }>} */ (async ({ task, reason }) => {
       const changes = getMaintenanceWorkflowChanges(task, reason, user?.name || user?.email);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Manutenção acionada · tempo da hotelaria congelado');
@@ -80,11 +86,11 @@ export default function Solicitacoes() {
     onError: (error) => toast.error(error.message || 'Não foi possível acionar a manutenção.'),
   });
   const resumeMaintenance = useMutation({
-    mutationFn: async (task) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, CleaningTaskRecord>} */ (async (task) => {
       const changes = getResumeMaintenanceChanges(task);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Manutenção concluída · processo retomado com o tempo congelado');

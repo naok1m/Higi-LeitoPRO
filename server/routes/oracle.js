@@ -63,7 +63,10 @@ export const oracleHandler = async (request, response, url) => {
     }
     try {
       const rows = await fetchOracleOccupiedBeds(companyCode);
-      sendJson(response, 200, { rows: rows.filter(isOracleAdHocBedAvailable) });
+      sendJson(response, 200, {
+        rows: rows.filter(isOracleAdHocBedAvailable),
+        total: rows.length,
+      });
     } catch (error) {
       logger.error('Falha ao consultar leitos ocupados disponíveis para solicitação avulsa.', error);
       throw new ApiError(502, 'oracle_occupied_beds_query_failed', 'Não foi possível consultar os leitos ocupados no MV.');

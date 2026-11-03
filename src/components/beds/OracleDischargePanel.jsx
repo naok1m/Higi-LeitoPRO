@@ -12,8 +12,19 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
 };
 
-/** @param {{ isLeader: boolean; oracleConfigured: boolean }} props */
-export default function OracleDischargePanel({ isLeader, oracleConfigured }) {
+/**
+ * @typedef {{
+ *   CD_LEITO?: string | number | null;
+ *   DS_LEITO?: string | null;
+ *   UNIDADE_INTERNACAO?: string | null;
+ *   DS_ENFERMARIA?: string | null;
+ *   SETOR?: string | null;
+ *   SITUACAO_LEITO?: string | null;
+ * }} OracleOccupiedBed
+ */
+
+/** @param {{ isLeader: boolean; oracleConfigured: boolean; occupiedBedsQuery: import('@tanstack/react-query').UseQueryResult<{ rows?: OracleOccupiedBed[]; total?: number }, Error> }} props */
+export default function OracleDischargePanel({ isLeader, oracleConfigured, occupiedBedsQuery }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,12 +42,12 @@ export default function OracleDischargePanel({ isLeader, oracleConfigured }) {
     enabled,
     refetchInterval: 2000,
   });
-  const { data: occupiedBeds, isLoading: bedsLoading, isError: bedsError, error: bedsErrorMessage } = useQuery({
-    queryKey: ['oracle-occupied-beds', user?.activeCompanyId],
-    queryFn: db.oracle.occupiedBeds,
-    enabled: enabled && dialogOpen,
-    refetchInterval: 15000,
-  });
+  const {
+    data: occupiedBeds,
+    isLoading: bedsLoading,
+    isError: bedsError,
+    error: bedsErrorMessage,
+  } = occupiedBedsQuery;
 
   const beds = useMemo(() => (occupiedBeds?.rows || [])
     .filter((bed) => bed.CD_LEITO !== null && bed.CD_LEITO !== undefined)

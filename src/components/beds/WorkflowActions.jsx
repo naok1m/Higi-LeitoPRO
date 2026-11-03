@@ -8,6 +8,19 @@ const NEXT_ACTIONS = {
   revisao: 'Aprovar revisão · liberar quarto',
 };
 
+/**
+ * @param {{
+ *   task: { id: string; bed_id: string; [key: string]: any };
+ *   isLeader: boolean;
+ *   busy?: boolean;
+ *   onAdvance?: (task: { id: string; bed_id: string; [key: string]: any }) => void;
+ *   onConfirmMvRelease?: (task: { id: string; bed_id: string; [key: string]: any }) => void;
+ *   onStartStage?: (task: { id: string; bed_id: string; [key: string]: any }, stage: string) => void;
+ *   onReportMaintenance?: (task: { id: string; bed_id: string; [key: string]: any }, reason: string) => void;
+ *   onResumeMaintenance?: (task: { id: string; bed_id: string; [key: string]: any }) => void;
+ *   canHandleRouparia?: boolean;
+ * }} props
+ */
 export default function WorkflowActions({
   task,
   isLeader,
@@ -32,7 +45,7 @@ export default function WorkflowActions({
   const reportMaintenance = () => {
     const trimmedReason = reason.trim();
     if (!trimmedReason) return;
-    onReportMaintenance(task, trimmedReason);
+    onReportMaintenance?.(task, trimmedReason);
     setMaintenanceDialogOpen(false);
   };
 
@@ -45,7 +58,7 @@ export default function WorkflowActions({
           {task.maintenance_reason && <p className="text-xs">Problema: {task.maintenance_reason}</p>}
           {isLeader && (
             <button type="button" className="w-full h-11 rounded-md text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50" disabled={busy}
-              onClick={() => onResumeMaintenance(task)}>
+              onClick={() => onResumeMaintenance?.(task)}>
               Manutenção concluída · retomar processo
             </button>
           )}
@@ -60,19 +73,19 @@ export default function WorkflowActions({
           )}
           {stage === 'rouparia' && canHandleRouparia && !stageStarted && (
             <button type="button" className="w-full h-11 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-              disabled={busy} onClick={() => onStartStage(task, stage)}>
+              disabled={busy} onClick={() => onStartStage?.(task, stage)}>
               Iniciar rouparia
             </button>
           )}
           {stage === 'revisao' && isLeader && !stageStarted && (
             <button type="button" className="w-full h-11 rounded-md text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50"
-              disabled={busy} onClick={() => onStartStage(task, stage)}>
+              disabled={busy} onClick={() => onStartStage?.(task, stage)}>
               Iniciar revisão
             </button>
           )}
           {canAdvance && stageStarted && (
             <button type="button" className="w-full h-11 rounded-md text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50" disabled={busy}
-              onClick={() => onAdvance(task)}>
+              onClick={() => onAdvance?.(task)}>
               {NEXT_ACTIONS[stage]}
             </button>
           )}
@@ -123,7 +136,7 @@ export default function WorkflowActions({
             </p>
             <button type="button" className="w-full h-11 rounded-md text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-50"
               disabled={busy} onClick={() => {
-                onConfirmMvRelease(task);
+                onConfirmMvRelease?.(task);
                 setMvConfirmationOpen(false);
               }}>
               Confirmar no sistema

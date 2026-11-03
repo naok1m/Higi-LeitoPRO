@@ -1,6 +1,7 @@
 import React from "react";
 import LogoFooter from "@/components/LogoFooter";
 
+/** @param {{ icon?: React.ComponentType<any> | null; imageSrc?: string; imageAlt?: string; title: string; subtitle?: string; footer?: React.ReactNode; children: React.ReactNode }} props */
 export default function AuthLayout({ icon: Icon = null, imageSrc, imageAlt = "", title, subtitle, footer, children }) {
   return (
     <div className="min-h-screen flex flex-col bg-background px-4">

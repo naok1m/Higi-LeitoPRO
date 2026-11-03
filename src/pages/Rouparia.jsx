@@ -14,6 +14,11 @@ import {
 } from '@/lib/bedWorkflow';
 import { useAuth } from '@/lib/AuthContext';
 
+/**
+ * @typedef {{ id: string; bed_id: string; [key: string]: any }} CleaningTaskRecord
+ * @typedef {{ id: string }} EmployeeRecord
+ */
+
 export default function Rouparia() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -34,14 +39,14 @@ export default function Rouparia() {
     queryClient.invalidateQueries({ queryKey: ['bed-counts'] });
   };
   const advance = useMutation({
-    mutationFn: async (task) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, CleaningTaskRecord>} */ (async (task) => {
       const changes = getAdvanceWorkflowChanges(task, '');
       await db.entities.CleaningTask.update(task.id, {
         ...changes.taskUpdates,
         rouparia_by: user?.email,
       });
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Rouparia concluída · enviado para revisão');
@@ -49,14 +54,14 @@ export default function Rouparia() {
     onError: (requestError) => toast.error(requestError.message || 'Não foi possível concluir a rouparia.'),
   });
   const startStage = useMutation({
-    mutationFn: async ({ task, employee }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; employee: EmployeeRecord }>} */ (async ({ task, employee }) => {
       const changes = getStartStageChanges(task, 'rouparia');
       await db.entities.CleaningTask.update(task.id, {
         ...changes.taskUpdates,
         rouparia_employee_id: employee.id,
       });
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       setStartingTask(null);
       setStartingEmployee(null);
@@ -66,11 +71,11 @@ export default function Rouparia() {
     onError: (requestError) => toast.error(requestError.message || 'Não foi possível iniciar a rouparia.'),
   });
   const reportMaintenance = useMutation({
-    mutationFn: async ({ task, reason }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; reason: string }>} */ (async ({ task, reason }) => {
       const changes = getMaintenanceWorkflowChanges(task, reason, user?.email);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Manutenção acionada · tempo da hotelaria congelado');

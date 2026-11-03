@@ -31,11 +31,11 @@ export default function Estrutura() {
   };
 
   const removeUnit = useMutation({
-    mutationFn: async (unit) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { id: string }>} */ (async (unit) => {
       const linkedBeds = await db.entities.Bed.filter({ unit_id: unit.id });
       if (linkedBeds.items.length) throw new Error('Remova os leitos desta unidade antes de excluí-la.');
       return db.entities.Unit.delete(unit.id);
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Unidade removida.');
@@ -44,11 +44,11 @@ export default function Estrutura() {
   });
 
   const removeBed = useMutation({
-    mutationFn: async (bed) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { id: string }>} */ (async (bed) => {
       const tasks = await db.entities.CleaningTask.filter({ bed_id: bed.id }, { limit: 1 });
       if (tasks.items.length) throw new Error('Este leito possui histórico de limpezas e não pode ser removido.');
       return db.entities.Bed.delete(bed.id);
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Leito removido.');
@@ -164,7 +164,7 @@ export default function Estrutura() {
                   </td>
                 </tr>
               ))}
-              {beds && bedItems.length === 0 && <tr><td colSpan="4" className="px-4 py-4 text-sm text-slate-500">Nenhum leito cadastrado.</td></tr>}
+              {beds && bedItems.length === 0 && <tr><td colSpan={4} className="px-4 py-4 text-sm text-slate-500">Nenhum leito cadastrado.</td></tr>}
             </tbody>
           </table>
         </div>

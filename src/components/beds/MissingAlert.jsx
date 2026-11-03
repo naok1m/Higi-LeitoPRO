@@ -14,7 +14,9 @@ export default function MissingAlert() {
     refetchInterval: 15000,
   });
   const resolve = useMutation({
-    mutationFn: (bed) => db.entities.Bed.update(bed.id, { missing_count: 0, missing_items: '' }),
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { id: string }>} */ (
+      (bed) => db.entities.Bed.update(bed.id, { missing_count: 0, missing_items: '' })
+    ),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['missing-items'] }); qc.invalidateQueries({ queryKey: ['beds'] }); },
     onError: (requestError) => toast.error(requestError.message || 'Não foi possível atualizar o alerta.'),
   });

@@ -18,6 +18,12 @@ import {
   getStartStageChanges,
 } from '@/lib/bedWorkflow';
 
+/**
+ * @typedef {{ id: string; code: string; unit_name: string; status: string }} BedRecord
+ * @typedef {{ id: string; name: string }} EmployeeRecord
+ * @typedef {{ id: string; bed_id: string; workflow_stage?: string; [key: string]: any }} CleaningTaskRecord
+ */
+
 export default function Leitos() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -47,6 +53,18 @@ export default function Leitos() {
     enabled: isLeader,
     refetchInterval: 5000,
   });
+  const oracleOccupiedBedsQuery = useQuery({
+    queryKey: ['oracle-occupied-beds', user?.activeCompanyId],
+    queryFn: db.oracle.occupiedBeds,
+    enabled: isLeader && Boolean(oracleStatus?.configured),
+    refetchInterval: 2000,
+  });
+  const {
+    data: oracleOccupiedBeds,
+    isLoading: isOracleOccupiedBedsLoading,
+    isError: isOracleOccupiedBedsError,
+    error: oracleOccupiedBedsError,
+  } = oracleOccupiedBedsQuery;
   const { data: idleLimit, isError: idleLimitError, error: idleLimitErrorMessage } = useQuery({
     queryKey: ['idle-limit'],
     queryFn: db.workflow.getIdleLimit,
@@ -68,7 +86,7 @@ export default function Leitos() {
     task.workflow_stage === 'higienizacao' || !task.workflow_stage);
 
   const start = useMutation({
-    mutationFn: async ({ bed, employee, type }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { bed: BedRecord; employee: EmployeeRecord; type: string }>} */ (async ({ bed, employee, type }) => {
       const startedAt = new Date().toISOString();
       await db.entities.CleaningTask.create({
         bed_id: bed.id, bed_code: bed.code, unit_name: bed.unit_name, employee_id: employee.id,
@@ -77,12 +95,12 @@ export default function Leitos() {
         started_at: startedAt, mv_sync_status: 'pendente',
       });
       await db.entities.Bed.update(bed.id, { status: 'em_limpeza' });
-    },
+    }),
     onSuccess: () => { setStarting(null); refresh(); toast.success('Processo de hotelaria iniciado'); },
     onError: (error) => toast.error(error.message || 'Não foi possível iniciar a limpeza.'),
   });
   const advance = useMutation({
-    mutationFn: async (task) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<{ mvReleased?: boolean } | undefined, CleaningTaskRecord>} */ (async (task) => {
       if (task.workflow_stage === 'revisao') {
         return db.workflow.completeReview(task.id);
       }
@@ -90,7 +108,7 @@ export default function Leitos() {
       const changes = getAdvanceWorkflowChanges(task, reviewerName);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: (result, task) => {
       refresh();
       toast.success(task.workflow_stage === 'revisao'
@@ -100,7 +118,9 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível avançar o processo.'),
   });
   const confirmMvRelease = useMutation({
-    mutationFn: (task) => db.workflow.confirmMvRelease(task.id),
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, CleaningTaskRecord>} */ (
+      (task) => db.workflow.confirmMvRelease(task.id)
+    ),
     onSuccess: () => {
       refresh();
       toast.success('Liberação confirmada · leito liberado no Higi Leito PRO');
@@ -108,11 +128,11 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível confirmar a liberação no MV.'),
   });
   const startStage = useMutation({
-    mutationFn: async ({ task, stage }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; stage: string }>} */ (async ({ task, stage }) => {
       const changes = getStartStageChanges(task, stage);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Etapa iniciada');
@@ -120,11 +140,11 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível iniciar a etapa.'),
   });
   const reportMaintenance = useMutation({
-    mutationFn: async ({ task, reason }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; reason: string }>} */ (async ({ task, reason }) => {
       const changes = getMaintenanceWorkflowChanges(task, reason, user?.name || user?.email);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Manutenção acionada · tempo da hotelaria congelado');
@@ -132,11 +152,11 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível acionar a manutenção.'),
   });
   const resumeMaintenance = useMutation({
-    mutationFn: async (task) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, CleaningTaskRecord>} */ (async (task) => {
       const changes = getResumeMaintenanceChanges(task);
       await db.entities.CleaningTask.update(task.id, changes.taskUpdates);
       await db.entities.Bed.update(task.bed_id, { status: changes.bedStatus });
-    },
+    }),
     onSuccess: () => {
       refresh();
       toast.success('Manutenção concluída · processo retomado com o tempo congelado');
@@ -144,7 +164,7 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível retomar o processo.'),
   });
   const checkMaterials = useMutation({
-    mutationFn: async ({ task, missing, total }) => {
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { task: CleaningTaskRecord; missing: string[]; total: number }>} */ (async ({ task, missing, total }) => {
       const items = missing.join(', ');
       await db.entities.MaterialCheck.create({
         bed_id: task.bed_id,
@@ -161,7 +181,7 @@ export default function Leitos() {
         missing_count: missing.length,
         missing_items: items,
       });
-    },
+    }),
     onSuccess: (_, values) => {
       setChecking(null);
       refresh();
@@ -171,11 +191,14 @@ export default function Leitos() {
     onError: (error) => toast.error(error.message || 'Não foi possível registrar a conferência.'),
   });
   const setStatus = useMutation({
-    mutationFn: ({ bed, status }) => db.entities.Bed.update(bed.id, { status }),
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { bed: BedRecord; status: string }>} */ (
+      ({ bed, status }) => db.entities.Bed.update(bed.id, { status })
+    ),
     onSuccess: refresh,
   });
 
   const countOf = (s) => counts?.rows?.find((r) => r.status === s)?.count || 0;
+  const occupiedBedCount = Number.isInteger(oracleOccupiedBeds?.total) ? oracleOccupiedBeds.total : '—';
 
   return (
     <div className="space-y-5">
@@ -202,16 +225,28 @@ export default function Leitos() {
           Não foi possível carregar o limite de ociosidade: {idleLimitErrorMessage.message}
         </p>
       )}
-      <OracleDischargePanel isLeader={isLeader} oracleConfigured={oracleStatus?.configured} />
+      <OracleDischargePanel isLeader={isLeader} oracleConfigured={oracleStatus?.configured}
+        occupiedBedsQuery={oracleOccupiedBedsQuery} />
       <MissingAlert />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {Object.entries(STATUS).map(([k, v]) => (
+        {Object.entries(STATUS).filter(([status]) => status !== 'livre').map(([k, v]) => (
           <div key={k} className={`rounded-2xl border p-3 ${v.cls}`}>
-            <p className="text-2xl font-semibold">{countOf(k)}</p>
-            <p className="text-xs">{v.label}</p>
+            <p className="text-2xl font-semibold">
+              {k === 'ocupado'
+                ? oracleStatus?.configured && !isOracleOccupiedBedsLoading && !isOracleOccupiedBedsError
+                  ? occupiedBedCount
+                  : '—'
+                : countOf(k)}
+            </p>
+            <p className="text-xs">{k === 'ocupado' ? 'Total de leitos ocupados' : v.label}</p>
           </div>
         ))}
       </div>
+      {oracleStatus?.configured && isOracleOccupiedBedsError && (
+        <p role="alert" className="text-sm text-red-700">
+          Não foi possível consultar o total de leitos ocupados no MV: {oracleOccupiedBedsError.message}
+        </p>
+      )}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {[{ id: 'all', name: 'Todas' }, ...(units?.items || [])].map((u) => (
           <button key={u.id} onClick={() => setUnitId(u.id)} className={`px-4 h-10 rounded-full text-sm whitespace-nowrap border ${unitId === u.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600'}`}>{u.name}</button>

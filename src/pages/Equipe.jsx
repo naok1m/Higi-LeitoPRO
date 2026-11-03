@@ -58,7 +58,9 @@ export default function Equipe() {
     onError: (error) => toast.error(error.message || 'Não foi possível cadastrar o colaborador.'),
   });
   const toggle = useMutation({
-    mutationFn: (e) => db.entities.Employee.update(e.id, { active: !e.active }),
+    mutationFn: /** @type {import('@tanstack/react-query').MutationFunction<unknown, { id: string; active: boolean }>} */ (
+      (e) => db.entities.Employee.update(e.id, { active: !e.active })
+    ),
     onSuccess: refresh,
     onError: (error) => toast.error(error.message || 'Não foi possível alterar o status do colaborador.'),
   });
