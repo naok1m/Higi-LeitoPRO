@@ -59,7 +59,7 @@ export const normalizeOracleCleaningRow = (row, companyCode) => {
       code: stringValue(row.DS_LEITO) || bedOracleCode,
       unit_id: unitId,
       unit_name: unitName,
-      status: 'aguardando_limupserpeza',
+      status: 'aguardando_limpeza',
       oracle_source: 'oracle',
       oracle_company_code: companyCode,
       oracle_cd_leito: bedOracleCode,
