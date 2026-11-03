@@ -155,8 +155,6 @@ export const upsertOracleCleaningBeds = async (rows, companyCode) => updateEntit
   for (const bed of beds) {
     if (bed.oracle_source !== 'oracle'
       || bed.oracle_company_code !== companyCode
-      || !bed.oracle_request_missing
-      || bed.status !== 'aguardando_limpeza'
       || activeRequestBedIds.has(bed.id)) continue;
     const activeTask = activeTasks.find((task) =>
       task.bed_id === bed.id && getRecordCompanyId(task) === bed.company_id);
