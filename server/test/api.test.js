@@ -565,6 +565,34 @@ test('runs the collaborator cleaning flow on scoped database operations', async 
   assert.deepEqual(rows, [{ actor_email: 'colab@example.test' }]);
 });
 
+test('records who started the review stage', async () => {
+  const admin = await login('ti@example.test', 'senha-segura-admin');
+  await api('/api/auth/switch-company', {
+    method: 'POST',
+    cookie: admin.cookie,
+    body: { companyId: '19' },
+  });
+  const reviewIdleStartedAt = new Date(Date.now() - 60000).toISOString();
+  await seedEntities({
+    CleaningTask: [{
+      id: 'review-start-attribution-task',
+      company_id: '19',
+      status: 'em_andamento',
+      workflow_stage: 'revisao',
+      revisao_idle_started_at: reviewIdleStartedAt,
+    }],
+  });
+
+  const started = await api('/api/entities/CleaningTask/record/review-start-attribution-task', {
+    method: 'PATCH',
+    cookie: admin.cookie,
+    body: { workflow_action: 'start', workflow_stage: 'revisao' },
+  });
+  assert.equal(started.status, 200);
+  assert.equal(started.payload.record.revisao_started_by, admin.user.name || admin.user.email);
+  assert.ok(started.payload.record.revisao_started_at);
+});
+
 test('restricts Oracle discharge and ad-hoc endpoints to authenticated leaders', async () => {
   const anonymousForecast = await api('/api/oracle/discharge-forecast');
   assert.equal(anonymousForecast.status, 401);

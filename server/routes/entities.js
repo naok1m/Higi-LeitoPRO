@@ -504,6 +504,8 @@ export const entityHandler = async (request, response, url) => {
             rouparia_employee_id: employee.id,
             rouparia_employee_name: employee.name,
           };
+        } else if (stage === 'revisao') {
+          stageAssignment = { revisao_started_by: actor.name || actor.email };
         }
         values = {
           [`${stage}_started_at`]: nowIso,

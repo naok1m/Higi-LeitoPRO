@@ -14,7 +14,12 @@ export default function TimeCompositionChart({ title, operationSeconds = 0, idle
 
   return (
     <section className="rounded-2xl border bg-white p-4">
-      <h3 className="font-medium">{title}</h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-medium">{title}</h3>
+        <p className="text-xs text-slate-500">
+          Tempo total: <span className="font-mono font-semibold text-slate-800">{formatDuration(total)}</span>
+        </p>
+      </div>
       {total === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500">Sem durações registradas no período.</p>
       ) : (

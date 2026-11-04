@@ -4,10 +4,11 @@ import { z } from 'zod';
 
 export const projectRoot = path.resolve(import.meta.dirname, '..', '..');
 
-// Variáveis já definidas no ambiente têm prioridade; o .env.local (desenvolvimento)
-// é lido antes do .env (servidor), então ele vence quando os dois existem.
+// Variáveis já definidas no ambiente têm prioridade. Em desenvolvimento, .env.local
+// vence .env; em produção, .env.local não deve substituir a configuração do servidor.
 if (process.env.HIGI_SKIP_ENV_FILE !== '1') {
-  for (const file of ['.env.local', '.env']) {
+  const files = process.env.NODE_ENV === 'production' ? ['.env'] : ['.env.local', '.env'];
+  for (const file of files) {
     const fullPath = path.join(projectRoot, file);
     if (existsSync(fullPath)) process.loadEnvFile(fullPath);
   }

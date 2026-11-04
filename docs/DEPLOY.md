@@ -98,6 +98,8 @@ O instalador:
 5. registra os serviços **HigiLeitoPro-API** e **HigiLeitoPro-Worker**, libera a porta no firewall e agenda o backup das 02:00;
 6. inicia tudo e testa se a API responde.
 
+Em produção, a API, o worker e a migração usam o `.env`; o `.env.local` é reservado para desenvolvimento.
+
 **Trazendo os dados do sistema antigo:** se o app já estava rodando na sua máquina, os dados estão em
 `%LOCALAPPDATA%\HigiLeitoPro\users.json`. Copie esse arquivo para o servidor e rode:
 

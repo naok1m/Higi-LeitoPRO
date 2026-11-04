@@ -107,8 +107,18 @@ Write-Step '5/9 Gerando as telas (npm run build)'
 Assert-ExitCode 'npm run build'
 
 Write-Step '6/9 Criando as tabelas (npm run db:migrate)'
-& npm run db:migrate
-Assert-ExitCode 'npm run db:migrate'
+$previousNodeEnv = $env:NODE_ENV
+$env:NODE_ENV = 'production'
+try {
+    & npm run db:migrate
+    Assert-ExitCode 'npm run db:migrate'
+} finally {
+    if ($null -eq $previousNodeEnv) {
+        Remove-Item Env:\NODE_ENV -ErrorAction SilentlyContinue
+    } else {
+        $env:NODE_ENV = $previousNodeEnv
+    }
+}
 
 if ($ImportJson) {
     Write-Step 'Importando dados do sistema antigo'
